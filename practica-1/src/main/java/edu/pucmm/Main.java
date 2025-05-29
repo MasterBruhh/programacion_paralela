@@ -9,5 +9,20 @@ public class Main {
 
         System.out.println("\nEjecutando suma secuencial...");
         SumaSecuencial.ejecutar("numeros.txt");
+
+        System.out.println("\nEjecutando suma paralela con 2 hilos...");
+        SumaParalela.ejecutar("numeros.txt", 2);
+
+        System.out.println("\nEjecutando suma paralela con 4 hilos...");
+        SumaParalela.ejecutar("numeros.txt", 4);
+
+        System.out.println("\nEjecutando suma paralela con 8 hilos...");
+        SumaParalela.ejecutar("numeros.txt", 8);
+
+        System.out.println("\nEjecutando suma paralela con 16 hilos...");
+        SumaParalela.ejecutar("numeros.txt", 16);
+
+        System.out.println("\nEjecutando suma paralela con 32 hilos...");
+        SumaParalela.ejecutar("numeros.txt", 32);
     }
 }

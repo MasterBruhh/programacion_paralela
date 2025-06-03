@@ -22,6 +22,7 @@ public class ProducerConsumer {
         ExecutorService productor = Executors.newFixedThreadPool(PRODUCER_COUNT);
         ExecutorService consumidor = Executors.newFixedThreadPool(CONSUMER_COUNT);
 
+        // Iniciar los productores y consumidores
         for (int i = 0; i < PRODUCER_COUNT; i++) {
             productor.execute(new Producer(queue));
         }

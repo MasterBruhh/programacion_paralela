@@ -36,16 +36,16 @@ public class ParallelMatrixSearch {
 
     private static void sequentialSearch() {
         // Implementar búsqueda secuencial
-        boolean found = false;
+        boolean found = false; // Variable para indicar si se encontró el número
         for (int row = 0; row < MATRIX_SIZE && !found; row++) {
             for (int col = 0; col < MATRIX_SIZE && !found; col++) {
-                if (matrix[row][col] == TARGET) {
-                    found = true;
+                if (matrix[row][col] == TARGET) { // Comparar con el número objetivo
+                    found = true; // Marcar como encontrado
                     System.out.println("Numero encontrado en la fila " + row + ", columna " + col);
                 }
             }
         }
-        if (!found) {
+        if (!found) { // Si no se encontró el número
             System.out.println("Numero no encontrado en la matriz.");
         }
         System.out.println("Busqueda secuencial completada.");
@@ -54,14 +54,14 @@ public class ParallelMatrixSearch {
     private static void parallelSearch() {
         // Implementar búsqueda paralela
         // Sugerencia: usar AtomicBoolean para indicar si ya se encontró el número y detener hilos
-        AtomicBoolean found = new AtomicBoolean(false);
-        Thread[] threads = new Thread[THREAD_COUNT];
-        int rowsPerThread = MATRIX_SIZE / THREAD_COUNT;
+        AtomicBoolean found = new AtomicBoolean(false); // Variable atómica para indicar si se encontró el número
+        Thread[] threads = new Thread[THREAD_COUNT]; // Arreglo de hilos para manejar la búsqueda paralela
+        int rowsPerThread = MATRIX_SIZE / THREAD_COUNT; // Calcular cuántas filas manejará cada hilo (250 filas por hilo en este caso)
         for (int i = 0; i < THREAD_COUNT; i++) {
             final int threadIndex = i;
             threads[i] = new Thread(() -> {
-                int startRow = threadIndex * rowsPerThread;
-                int endRow = (threadIndex == THREAD_COUNT - 1) ? MATRIX_SIZE : startRow + rowsPerThread;
+                int startRow = threadIndex * rowsPerThread; // Calcular la fila inicial para este hilo
+                int endRow = (threadIndex == THREAD_COUNT - 1) ? MATRIX_SIZE : startRow + rowsPerThread; // Calcular la fila final para este hilo (el último hilo maneja el resto de filas)
 
                 for (int row = startRow; row < endRow && !found.get(); row++) {
                     for (int col = 0; col < MATRIX_SIZE && !found.get(); col++) {

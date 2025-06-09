@@ -6,6 +6,15 @@ import java.util.concurrent.LinkedBlockingQueue;
 public class Node implements Runnable {
     private final int id;
     private final BlockingQueue<Message> messageQueue;
+    private Node neighbor;
+
+    public void setNeighbor(Node neighbor) {
+        this.neighbor = neighbor;
+    }
+
+    public Node getNeighbor() {
+        return neighbor;
+    }
 
     public Node(int id) {
         this.id = id;
@@ -33,7 +42,10 @@ public class Node implements Runnable {
                 if (message.getDestinationId() == id) {
                     System.out.println("Nodo " + id + " recibió mensaje de Nodo " + message.getSourceId()
                             + ": " + message.getContent());
-                }
+                } else {
+                // Retransmitir al vecino
+                neighbor.receiveMessage(message);
+            }
             } catch (InterruptedException e) {
                 System.out.println("Nodo " + id + " detenido.");
                 Thread.currentThread().interrupt();

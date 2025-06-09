@@ -6,15 +6,19 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
 public class Node implements Runnable {
+
     private final int id;
     private final BlockingQueue<Message> messageQueue;
 
-    // Para RingNetwork
+    // Ring
     private Node neighbor;
 
-    // Para TreeNetwork
+    // Tree
     private Node parent;
     private List<Node> children = new ArrayList<>();
+
+    // Fully Connected
+    private List<Node> neighbors = new ArrayList<>();
 
     public Node(int id) {
         this.id = id;
@@ -28,12 +32,13 @@ public class Node implements Runnable {
     public void receiveMessage(Message message) {
         // Simula que todos reciben, pero solo el destinatario procesa
         try {
-            messageQueue.put(message); // Encola el mensaje
+            messageQueue.put(message);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
     }
 
+    // Ring
     public void setNeighbor(Node neighbor) {
         this.neighbor = neighbor;
     }
@@ -42,6 +47,7 @@ public class Node implements Runnable {
         return neighbor;
     }
 
+    // Tree
     public void setParent(Node parent) {
         this.parent = parent;
     }
@@ -58,6 +64,15 @@ public class Node implements Runnable {
         return children;
     }
 
+    // Fully Connected
+    public void addNeighbor(Node neighbor) {
+        neighbors.add(neighbor);
+    }
+
+    public List<Node> getNeighbors() {
+        return neighbors;
+    }
+
     @Override
     public void run() {
         while (!Thread.currentThread().isInterrupted()) {
@@ -68,17 +83,22 @@ public class Node implements Runnable {
                     System.out.println("Nodo " + id + " recibió mensaje de Nodo " + message.getSourceId()
                             + ": " + message.getContent());
                 } else {
-                    // Reenvío según el contexto de topología
+                    // Ring
                     if (neighbor != null) {
-                        neighbor.receiveMessage(message); // Ring
+                        neighbor.receiveMessage(message);
                     }
 
+                    // Tree
                     if (parent != null) {
-                        parent.receiveMessage(message); // Tree (hacia arriba)
+                        parent.receiveMessage(message);
+                    }
+                    for (Node child : children) {
+                        child.receiveMessage(message);
                     }
 
-                    for (Node child : children) {
-                        child.receiveMessage(message); // Tree (hacia abajo)
+                    // Fully Connected
+                    for (Node neighbor : neighbors) {
+                        neighbor.receiveMessage(message);
                     }
                 }
 

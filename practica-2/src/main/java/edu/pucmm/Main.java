@@ -1,17 +1,45 @@
 package edu.pucmm;
 
-//TIP To <b>Run</b> code, press <shortcut actionId="Run"/> or
-// click the <icon src="AllIcons.Actions.Execute"/> icon in the gutter.
+import edu.pucmm.core.NetworkManager;
+
+import java.util.Scanner;
+
 public class Main {
     public static void main(String[] args) {
-        //TIP Press <shortcut actionId="ShowIntentionActions"/> with your caret at the highlighted text
-        // to see how IntelliJ IDEA suggests fixing it.
-        System.out.printf("Hello and welcome!");
+        Scanner scanner = new Scanner(System.in);
+        NetworkManager manager = new NetworkManager();
 
-        for (int i = 1; i <= 5; i++) {
-            //TIP Press <shortcut actionId="Debug"/> to start debugging your code. We have set one <icon src="AllIcons.Debugger.Db_set_breakpoint"/> breakpoint
-            // for you, but you can always add more by pressing <shortcut actionId="ToggleLineBreakpoint"/>.
-            System.out.println("i = " + i);
+        System.out.println("Topologías disponibles: bus, ring, tree, fullyconnected");
+        System.out.print("Selecciona una topología: ");
+        String tipo = scanner.nextLine();
+
+        System.out.print("Número de nodos: ");
+        int nodos = scanner.nextInt();
+
+        manager.setupTopology(tipo, nodos);
+        manager.showState();
+
+        manager.startSimulation();
+
+        System.out.print("ID del nodo origen: ");
+        int origen = scanner.nextInt();
+
+        System.out.print("ID del nodo destino: ");
+        int destino = scanner.nextInt();
+        scanner.nextLine(); // consumir newline
+
+        System.out.print("Mensaje a enviar: ");
+        String mensaje = scanner.nextLine();
+
+        manager.sendMessage(origen, destino, mensaje);
+
+        // Esperar para que los hilos impriman los mensajes
+        try {
+            Thread.sleep(2000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
+
+        System.exit(0); // Finaliza el programa y sus hilos
     }
 }

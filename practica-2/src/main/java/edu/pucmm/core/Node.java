@@ -18,7 +18,7 @@ public class Node implements Runnable {
     private List<Node> children = new ArrayList<>();
 
     // Fully Connected
-    private List<Node> neighbors = new ArrayList<>();
+    private static List<Node> neighbors = new ArrayList<>();
 
     public Node(int id) {
         this.id = id;

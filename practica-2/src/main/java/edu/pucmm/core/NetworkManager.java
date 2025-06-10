@@ -28,6 +28,15 @@ public class NetworkManager {
             case "mesh":
                 topology = new MeshNetwork();
                 break;
+            case "star":
+                topology = new StarNetwork();
+                break;
+            case "hypercube":
+                topology = new HypercubeNetwork();
+                break;
+            case "switched":
+                topology = new SwitchedNetwork();
+                break;
             default:
                 System.out.println("Topología no reconocida: " + type);
                 return;

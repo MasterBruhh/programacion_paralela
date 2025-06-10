@@ -72,6 +72,14 @@ public class Node implements Runnable {
     public List<Node> getNeighbors() {
         return neighbors;
     }
+    public List<Integer> getNeighborIds() {
+        List<Integer> ids = new ArrayList<>();
+        for (Node neighbor : neighbors) {
+            ids.add(neighbor.getId());
+        }
+        return ids;
+    }
+
 
     @Override
     public void run() {
@@ -109,4 +117,17 @@ public class Node implements Runnable {
             }
         }
     }
+
+    public void sendMessage(Message msg) {
+        for (Node neighbor : neighbors) {
+            if (neighbor.getId() == msg.getDestinationId()) {
+                neighbor.receiveMessage(msg);
+                System.out.println("Nodo " + id + " reenvió mensaje a Nodo " + neighbor.getId());
+                return;
+            }
+        }
+
+        System.out.println("Nodo " + id + ": no se pudo enviar mensaje, destino " + msg.getDestinationId() + " no está entre vecinos.");
+    }
+
 }

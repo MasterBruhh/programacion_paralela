@@ -9,7 +9,7 @@ public class Main {
         Scanner scanner = new Scanner(System.in);
         NetworkManager manager = new NetworkManager();
 
-        System.out.println("Topologías disponibles: bus, ring, tree, fullyconnected");
+        System.out.println("Topologías disponibles: bus, ring, tree, fullyconnected, mesh");
         System.out.print("Selecciona una topología: ");
         String tipo = scanner.nextLine();
 

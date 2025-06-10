@@ -22,7 +22,7 @@ public class BusNetwork implements NetworkTopology {
 
     @Override
     public void sendMessage(int sourceId, int destinationId, String messageContent) {
-        Message message = new Message(sourceId, destinationId, messageContent);
+        Message message = new Message(sourceId, destinationId, messageContent,System.currentTimeMillis());
 
         // En un bus, el mensaje se transmite a todos, y solo el destino lo procesa
         for (Node node : nodes) {

@@ -38,7 +38,7 @@ public class TreeNetwork implements NetworkTopology {
 
     @Override
     public void sendMessage(int sourceId, int destinationId, String messageContent) {
-        Message message = new Message(sourceId, destinationId, messageContent);
+        Message message = new Message(sourceId, destinationId, messageContent,System.currentTimeMillis());
         nodes.get(sourceId).receiveMessage(message);
     }
 

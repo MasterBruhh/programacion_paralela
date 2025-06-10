@@ -2,9 +2,13 @@ package edu.pucmm.core;
 
 import edu.pucmm.topology.*;
 
+import java.util.HashMap;
+import java.util.Map;
+
 public class NetworkManager {
 
     private NetworkTopology topology;
+    private static Map<Integer, Node> nodes = new HashMap<>();
 
     public void setupTopology(String type, int numberOfNodes) {
         switch (type.toLowerCase()) {
@@ -20,6 +24,9 @@ public class NetworkManager {
             case "fully":
             case "fullyconnected":
                 topology = new FullyConnectedNetwork();
+                break;
+            case "mesh":
+                topology = new MeshNetwork();
                 break;
             default:
                 System.out.println("Topología no reconocida: " + type);
@@ -46,4 +53,13 @@ public class NetworkManager {
             topology.printNetworkState();
         }
     }
+
+    public static void registerNode(Node node) {
+        nodes.put(node.getId(), node);
+    }
+
+    public static Node getNode(int sourceId) {
+        return nodes.get(sourceId);
+    }
+
 }

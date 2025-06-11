@@ -22,6 +22,9 @@ El sistema actualmente soporta las siguientes **8 topologías**:
 - 🔹 `StarNetwork`: un nodo central conectado a todos los demás.
 - 🔹 `HypercubeNetwork`: nodos conectados según diferencias de bits en el ID.
 - 🔹 `SwitchedNetwork`: comunicación a través de switches simulados.
+---
+
+Nota: se implementó Map<Integer, Node> en topologías más complejas, donde la eficiencia de acceso directo por ID y la flexibilidad en las conexiones es clave para un manejo óptimo de la estructura de red.
 
 ---
 
@@ -61,3 +64,4 @@ src/
 ## Ejecución
 
 Para ejecutar el proyecto, solo es necesario compilar el código y ejecutar la clase main.
+

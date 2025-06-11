@@ -18,7 +18,7 @@ public class Node implements Runnable {
     private List<Node> children = new ArrayList<>();
 
     // Fully Connected
-    private static List<Node> neighbors = new ArrayList<>();
+    private List<Node> neighbors = new ArrayList<>();
 
     public Node(int id) {
         this.id = id;
@@ -86,6 +86,10 @@ public class Node implements Runnable {
         while (!Thread.currentThread().isInterrupted()) {
             try {
                 Message message = messageQueue.take();
+                if (message.hasVisited(id)) {
+                    continue; // Ya procesamos este mensaje
+                }
+                message.markVisited(id);
 
                 if (message.getDestinationId() == id) {
                     System.out.println("Nodo " + id + " recibió mensaje de Nodo " + message.getSourceId()

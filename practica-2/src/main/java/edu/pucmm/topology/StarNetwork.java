@@ -20,10 +20,16 @@ public class StarNetwork implements NetworkTopology {
         }
 
         // Asignar el nodo central (por ejemplo, el nodo 0)
-        centralNode = nodes.get(0);
+        Random random = new Random();
+        int rand = random.nextInt(nodes.size()); // Genera un índice aleatorio entre 0 (inclusive) y nodes.size() (exclusivo)
+        centralNode = nodes.get(rand);
+
 
         // Conectar cada nodo al nodo central (estrella)
-        for (int i = 1; i < numberOfNodes; i++) {
+        for (int i = 0; i < numberOfNodes; i++) {
+            if(i==rand) {
+                continue;
+            }
             Node node = nodes.get(i);
             node.addNeighbor(centralNode);
             centralNode.addNeighbor(node);
@@ -42,7 +48,7 @@ public class StarNetwork implements NetworkTopology {
         Node destination = nodes.get(destinationId);
 
         if (sourceId != centralNode.getId()) {
-            centralNode.receiveMessage(new Message(sourceId, centralNode.getId(), "[Central Relay] -> " + message,System.currentTimeMillis()));
+            centralNode.receiveMessage(new Message(sourceId, centralNode.getId(), "[Nodo Central] -> " + message,System.currentTimeMillis()));
         }
 
         if (destinationId != centralNode.getId()) {

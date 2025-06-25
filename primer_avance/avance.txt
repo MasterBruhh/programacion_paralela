@@ -1,0 +1,45 @@
+
+1
+PONTIFICIA UNIVERSIDAD CATÓLICA MADRE Y MAESTRA
+FACULTAD DE CIENCIAS E INGENIERÍA
+ESCUELA DE INGENIERÍA EN COMPUTACIÓN Y TELECOMUNICACIONES
+PROGRAMACIÓN PARALELA Y CONCURRENTE
+Avance Proyecto Final
+Sistema de Gestión de Tráfico
+Descripción General:
+El proyecto consiste en desarrollar un sistema para la gestión y control de semáforos y tráfico en dos escenarios distintos
+utilizando técnicas de programación paralela y concurrente en Java. Los estudiantes (grupo máximo de dos estudiantes)
+deberán implementar una aplicación con una interfaz gráfica en JavaFX que permita simular el comportamiento del tráfico en un
+cruce de calles con 4 intersecciones y en una autopista de dos direcciones con múltiples semáforos. La aplicación debe
+asegurar que no ocurran colisiones y que los vehículos de emergencia siempre tengan prioridad.
+Escenarios del Proyecto:
+- Escenario 1: Cruce de Calles con 4 Intersecciones:
+o Cada intersección tiene un "pare".
+o Los vehículos deben cruzar en el orden que llegan a la intersección.
+o Los vehículos de emergencia tienen prioridad sobre todos los demás vehículos. Debe considerar que para que un
+vehículo de emergencia avance todos los que están delante deben avanzar primero.
+o Evitar colisiones entre vehículos.
+o Interfaz Gráfica con JavaFX
+Componentes para Entregar:
+- Código fuente completo del proyecto. El código debe subirse a un repositorio público en GitHub.
+- Documentación detallada que incluya (La documentación también debe subirse al repositorio en GitHub):
+o Descripción del diseño del sistema.
+o Explicación de los algoritmos de control.
+o Instrucciones para ejecutar la aplicación.
+o Capturas de pantalla de la interfaz de usuario.
+o Resultados de pruebas y evaluación del sistema.
+Evaluación del Proyecto:
+La evaluación del proyecto se basará en:
+- Correctitud y Funcionalidad: Implementación correcta de la lógica de tráfico y control de semáforos.
+- Uso de Técnicas Concurrentes: Aplicación efectiva de programación paralela y concurrente.
+- Interfaz de Usuario: Usabilidad y claridad de la interfaz gráfica.
+- Prevención de Colisiones: Correcta implementación de la lógica para evitar colisiones.
+- Documentación: Claridad y detalle de la documentación proporcionada.
+Sugerencias y Mejoras:
+- Extensión del Proyecto: Considerar agregar más intersecciones y semáforos, o extender la autopista para simular un
+área de tráfico más grande.
+- Optimización del Rendimiento: Utilizar perfiles de rendimiento para identificar y optimizar cuellos de botella.
+- Funciones Adicionales: Agregar funcionalidades como la simulación de accidentes y desvíos, o la inclusión de
+transporte público en la simulación.
+La valoración de cada miembro del equipo se tomará en cuenta considerando los commits realizados en GitHub.
+Asegúrense de que ambos miembros del equipo contribuyan de manera equitativa al proyecto.

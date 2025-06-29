@@ -1,5 +1,10 @@
-package edu.pucmm.trafico;
+package edu.pucmm.simulation;
 
+import edu.pucmm.model.TipoVehiculo;
+
+/**
+ * representa un vehículo en la simulación de tráfico.
+ */
 public class Vehiculo {
     private final String id;
     private final TipoVehiculo tipo;
@@ -22,4 +27,4 @@ public class Vehiculo {
     public Direccion getDireccion() {
         return direccion;
     }
-}
+} 

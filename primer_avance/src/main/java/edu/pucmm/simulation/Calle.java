@@ -1,7 +1,10 @@
-package edu.pucmm.trafico;
+package edu.pucmm.simulation;
 
 import java.util.List;
 
+/**
+ * representa una calle con múltiples intersecciones.
+ */
 public class Calle {
     private final String nombre;
     private final List<Interseccion> intersecciones;
@@ -18,4 +21,4 @@ public class Calle {
     public List<Interseccion> getIntersecciones() {
         return intersecciones;
     }
-}
+} 

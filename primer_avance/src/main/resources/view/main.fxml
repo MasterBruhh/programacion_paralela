@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.control.MenuBar?>
+<?import javafx.scene.control.Menu?>
+<?import javafx.scene.control.MenuItem?>
+<?import javafx.scene.layout.Pane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.control.Button?>
+<?import javafx.geometry.Insets?>
+
+<?import javafx.scene.shape.Rectangle?>
+<?import javafx.scene.shape.Circle?>
+<BorderPane xmlns:fx="http://javafx.com/fxml"
+            fx:controller="edu.pucmm.controller.SimulationController">
+
+    <top>
+        <HBox>
+           <Button text="Salir" onAction="#handleExit"/>
+        </HBox>
+    </top>
+
+    <center>
+        <Pane fx:id="lienzo" prefWidth="800" prefHeight="600" style="-fx-background-color: lightgray;">
+            <children>
+                <!--horizontal-->
+                <Rectangle x="0" y="250" width="800" height="90" fill="gray" />
+                <Rectangle x="10" y="292" width="30" height="5" fill="yellow" />
+                <Rectangle x="60" y="292" width="30" height="5" fill="yellow" />
+                <Rectangle x="110" y="292" width="30" height="5" fill="yellow" />
+                <Rectangle x="160" y="292" width="30" height="5" fill="yellow" />
+                <Rectangle x="210" y="292" width="30" height="5" fill="yellow" />
+                <Rectangle x="260" y="292" width="30" height="5" fill="yellow" />
+                <Rectangle x="310" y="292" width="30" height="5" fill="yellow" />
+                <Rectangle x="460" y="292" width="30" height="5" fill="yellow" />
+                <Rectangle x="510" y="292" width="30" height="5" fill="yellow" />
+                <Rectangle x="560" y="292" width="30" height="5" fill="yellow" />
+                <Rectangle x="610" y="292" width="30" height="5" fill="yellow" />
+                <Rectangle x="660" y="292" width="30" height="5" fill="yellow" />
+                <Rectangle x="710" y="292" width="30" height="5" fill="yellow" />
+                <Rectangle x="760" y="292" width="30" height="5" fill="yellow" />
+
+                <!--vertical-->
+                <Rectangle x="355" y="0" width="90" height="600" fill="gray" />
+                <Rectangle x="395" y="10" width="5" height="30" fill="yellow" />
+                <Rectangle x="395" y="60" width="5" height="30" fill="yellow" />
+                <Rectangle x="395" y="110" width="5" height="30" fill="yellow" />
+                <Rectangle x="395" y="160" width="5" height="30" fill="yellow" />
+                <Rectangle x="395" y="210" width="5" height="30" fill="yellow" />
+                <Rectangle x="395" y="360" width="5" height="30" fill="yellow" />
+                <Rectangle x="395" y="410" width="5" height="30" fill="yellow" />
+                <Rectangle x="395" y="460" width="5" height="30" fill="yellow" />
+                <Rectangle x="395" y="510" width="5" height="30" fill="yellow" />
+                <Rectangle x="395" y="560" width="5" height="30" fill="yellow" />
+
+                <!-- Semáforo arriba -->
+                <Circle fx:id="semaforoArriba" centerX="460" centerY="200" radius="10" fill="red"/>
+
+                <!-- Semáforo abajo -->
+                <Circle fx:id="semaforoAbajo" centerX="340" centerY="400" radius="10" fill="red"/>
+
+                <!-- Semáforo izquierda -->
+                <Circle fx:id="semaforoIzquierda" centerX="300" centerY="235" radius="10" fill="red"/>
+
+                <!-- Semáforo derecha -->
+                <Circle fx:id="semaforoDerecha" centerX="500" centerY="355" radius="10" fill="red"/>
+            </children>
+        </Pane>
+    </center>
+
+    <bottom>
+        <HBox alignment="center" spacing="10">
+            <padding>
+                <Insets top="10" right="10" bottom="10" left="10"/>
+            </padding>
+            <Button text="Iniciar" onAction="#handlePlay"/>
+            <Button text="Pausar" onAction="#handlePause"/>
+            <Button text="Resetear" onAction="#handleReset"/>
+        </HBox>
+    </bottom>
+
+</BorderPane>

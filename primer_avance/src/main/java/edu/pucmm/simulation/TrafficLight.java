@@ -1,4 +1,4 @@
-package edu.pucmm.trafico;
+package edu.pucmm.simulation;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -16,6 +16,4 @@ public class TrafficLight {
     public boolean isGreen() {
         return green.get();
     }
-}
-
-
+} 

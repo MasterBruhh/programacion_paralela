@@ -1,6 +1,4 @@
-package edu.pucmm.controller;
-
 /**
  * paquete para los controladores javafx.
  */
-interface _PlaceholderControllerPackage {} 
+package edu.pucmm.controller; 

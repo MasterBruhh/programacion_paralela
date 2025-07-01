@@ -98,18 +98,6 @@ public class VehiculoEmergencia extends Vehiculo {
         return true; // simplificado por ahora
     }
     
-    /**
-     * Activa o desactiva la sirena.
-     */
-    public void setSirenActive(boolean active) {
-        this.sirenActive = active;
-        if (active) {
-            logger.info("🚨 sirena activada para vehículo " + id);
-        } else {
-            logger.info("🔇 sirena desactivada para vehículo " + id);
-        }
-    }
-    
     public boolean isSirenActive() {
         return sirenActive;
     }

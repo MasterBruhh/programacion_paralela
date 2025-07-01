@@ -1,10 +1,13 @@
 package edu.pucmm;
 
 import javafx.application.Application;
+import javafx.fxml.FXMLLoader;
 import javafx.scene.Scene;
 import javafx.scene.control.Label;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
+
+import java.io.IOException;
 
 /**
  * clase principal de la aplicación de gestión de tráfico.
@@ -16,7 +19,7 @@ public class Main extends Application {
     }
     
     @Override
-    public void start(Stage primaryStage) {
+    public void start(Stage primaryStage) throws IOException {
         // placeholder para la interfaz gráfica
         Label welcomeLabel = new Label("sistema de gestión de tráfico");
         welcomeLabel.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
@@ -26,9 +29,9 @@ public class Main extends Application {
         VBox root = new VBox(10);
         root.getChildren().addAll(welcomeLabel, statusLabel);
         root.setStyle("-fx-padding: 20px; -fx-alignment: center;");
-        
-        Scene scene = new Scene(root, 400, 200);
-        
+
+        FXMLLoader loader = new FXMLLoader(getClass().getResource("/view/main.fxml"));
+        Scene scene = new Scene(loader.load());
         primaryStage.setTitle("sistema de gestión de tráfico");
         primaryStage.setScene(scene);
         primaryStage.show();

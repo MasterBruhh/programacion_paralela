@@ -12,13 +12,29 @@ import javafx.stage.Stage;
 public class Main extends Application {
     
     public static void main(String[] args) {
-        // si se pasa "demo" como argumento, ejecutar demostración de vehículos
-        if (args.length > 0 && "demo".equals(args[0])) {
-            // ejecutar demostración sin javafx
-            System.out.println("ejecutando demostración de vehículos...");
-            edu.pucmm.simulation.VehiculoDemoSimple.main(new String[0]);
-            System.out.println("demo completado, terminando programa...");
-            System.exit(0); // terminar explícitamente el programa
+        if (args.length > 0) {
+            switch (args[0]) {
+                case "demo" -> {
+                    // ejecutar demostración simple de vehículos
+                    System.out.println("ejecutando demostración simple de vehículos...");
+                    edu.pucmm.simulation.VehiculoDemoSimple.main(new String[0]);
+                    System.out.println("demo completado, terminando programa...");
+                    System.exit(0);
+                }
+                case "cruce" -> {
+                    // ejecutar demostración del escenario 1 (cruce de calles)
+                    System.out.println("ejecutando demostración del escenario 1: cruce de calles...");
+                    edu.pucmm.simulation.CruceEscenario1Demo.main(new String[0]);
+                    System.out.println("demostración del cruce completada, terminando programa...");
+                    System.exit(0);
+                }
+                default -> {
+                    System.out.println("argumentos disponibles:");
+                    System.out.println("  demo  - demostración simple de vehículos");
+                    System.out.println("  cruce - demostración del escenario 1 (cruce de calles)");
+                    System.exit(0);
+                }
+            }
         } else {
             // ejecutar aplicación javafx normal
             launch(args);

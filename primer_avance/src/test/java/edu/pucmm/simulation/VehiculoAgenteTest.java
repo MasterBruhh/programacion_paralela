@@ -223,6 +223,20 @@ class VehiculoAgenteTest {
             return true;
         }
         
+        @Override
+        public void solicitarCruceInterseccion(String vehiculoId, 
+                                              edu.pucmm.model.TipoVehiculo tipo, 
+                                              double vehiculoPosX, 
+                                              double vehiculoPosY) throws InterruptedException {
+            // implementación vacía para pruebas
+        }
+        
+        @Override
+        public boolean estaCercaDeInterseccion(String vehiculoId, double posX, double posY) {
+            // en pruebas simples, no hay intersecciones
+            return false;
+        }
+        
         public List<VehiculoState> getPublishedStates() {
             return List.copyOf(publishedStates);
         }

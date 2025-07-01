@@ -63,19 +63,28 @@ public abstract class Vehiculo implements Runnable {
      * Ejecuta un tick de simulación del agente.
      */
     private void executeTick() {
-        // 1. calcular movimiento
+        // 1. verificar si está cerca de intersección y manejar cruce
+        try {
+            manejarIntersecciones();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            logger.warning("vehículo " + id + " interrumpido durante manejo de intersecciones");
+            return;
+        }
+        
+        // 2. calcular movimiento normal
         MovimientoInfo nextMovement = calcularMovimiento();
         
-        // 2. interactuar con entorno
+        // 3. interactuar con entorno
         if (puedeRealizarMovimiento(nextMovement)) {
-            // 3. aplicar movimiento
+            // 4. aplicar movimiento
             aplicarMovimiento(nextMovement);
             
-            // 4. publicar estado
+            // 5. publicar estado
             publishState();
         }
         
-        // lógica específica del tipo de vehículo
+        // 6. lógica específica del tipo de vehículo
         executeTypeSpecificLogic();
     }
     
@@ -121,6 +130,17 @@ public abstract class Vehiculo implements Runnable {
     protected void publishState() {
         VehiculoState estado = new VehiculoState(id, posX, posY, tipo);
         simulationModel.publishState(estado);
+    }
+    
+    /**
+     * Maneja la interacción con intersecciones cuando el vehículo está cerca.
+     */
+    private void manejarIntersecciones() throws InterruptedException {
+        // verificar si está cerca de una intersección
+        if (simulationModel.estaCercaDeInterseccion(id, posX, posY)) {
+            // solicitar cruzar la intersección
+            simulationModel.solicitarCruceInterseccion(id, tipo, posX, posY);
+        }
     }
     
     /**

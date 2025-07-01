@@ -127,11 +127,4 @@ public class VehiculoFactory {
     public static void resetIdCounter() {
         vehicleIdCounter.set(1);
     }
-    
-    /**
-     * Obtiene el próximo ID que se generará (útil para pruebas).
-     */
-    public static int getNextId() {
-        return vehicleIdCounter.get();
-    }
 } 

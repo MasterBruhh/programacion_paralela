@@ -7,7 +7,4 @@ module edu.pucmm {
     exports edu.pucmm;
     exports edu.pucmm.model;
     exports edu.pucmm.simulation;
-    exports edu.pucmm.controller;
-    exports edu.pucmm.view;
-    exports edu.pucmm.util;
 } 

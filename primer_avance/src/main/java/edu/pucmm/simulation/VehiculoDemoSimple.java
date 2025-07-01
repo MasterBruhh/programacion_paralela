@@ -155,5 +155,18 @@ public class VehiculoDemoSimple {
                         return distance < minDistance;
                     });
         }
+        
+        @Override
+        public void solicitarCruceInterseccion(String vehiculoId, TipoVehiculo tipo, 
+                                              double vehiculoPosX, double vehiculoPosY) throws InterruptedException {
+            // implementación vacía para demo simple - no hay cruces en esta demostración
+            logger.info("demo simple: ignorando solicitud de cruce para " + vehiculoId);
+        }
+        
+        @Override
+        public boolean estaCercaDeInterseccion(String vehiculoId, double posX, double posY) {
+            // en demo simple no hay intersecciones
+            return false;
+        }
     }
 }

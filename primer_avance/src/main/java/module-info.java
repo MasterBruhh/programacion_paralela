@@ -1,23 +1,13 @@
-/**
- * módulo del sistema de gestión de tráfico.
- */
 module edu.pucmm {
-    // dependencias de javafx
     requires javafx.controls;
     requires javafx.fxml;
-    requires javafx.graphics;
+    requires java.logging;
     
-    // logging
-    requires ch.qos.logback.classic;
-    
-    // exportar paquetes públicos
-    exports edu.pucmm.view;
-    exports edu.pucmm.controller;
+    opens edu.pucmm to javafx.fxml;
     exports edu.pucmm;
-    
-    // abrir el modelo a javafx para reflexión
-    opens edu.pucmm.model to javafx.fxml;
-    opens edu.pucmm.view to javafx.fxml;
-    opens edu.pucmm.controller to javafx.fxml;
-    opens edu.pucmm to javafx.graphics;
+    exports edu.pucmm.model;
+    exports edu.pucmm.simulation;
+    exports edu.pucmm.controller;
+    exports edu.pucmm.view;
+    exports edu.pucmm.util;
 } 

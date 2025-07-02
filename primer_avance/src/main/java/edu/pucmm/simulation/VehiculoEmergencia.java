@@ -37,9 +37,6 @@ public class VehiculoEmergencia extends Vehiculo {
         
         // mantener velocidad alta
         maintainEmergencySpeed();
-        
-        // cambio de dirección más decidido hacia objetivo
-        adjustDirectionForEmergency();
     }
     
     /**
@@ -67,19 +64,6 @@ public class VehiculoEmergencia extends Vehiculo {
     /**
      * Ajusta dirección para emergencia (más directo).
      */
-    private void adjustDirectionForEmergency() {
-        // cambio de dirección menos frecuente pero más decidido
-        if (ThreadLocalRandom.current().nextDouble() < 0.01) { // 1% probabilidad
-            // priorizar movimiento hacia adelante
-            if (ThreadLocalRandom.current().nextDouble() < 0.7) {
-                this.direccion = Direccion.recto;
-            } else {
-                // cambio lateral ocasional
-                this.direccion = ThreadLocalRandom.current().nextBoolean() ? 
-                               Direccion.derecha : Direccion.izquierda;
-            }
-        }
-    }
     
     @Override
     protected boolean puedeRealizarMovimiento(MovimientoInfo movimiento) {

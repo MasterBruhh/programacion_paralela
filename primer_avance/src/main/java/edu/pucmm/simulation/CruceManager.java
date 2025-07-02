@@ -29,11 +29,12 @@ public class CruceManager {
      * Direcciones de entrada al cruce.
      */
     public enum DireccionCruce {
-        NORTE(0, -50),   // entrada desde arriba
-        SUR(0, 50),      // entrada desde abajo  
-        ESTE(50, 0),     // entrada desde derecha
-        OESTE(-50, 0);   // entrada desde izquierda
-        
+        NORTE(400, 230),   // arriba del cruce
+        SUR(400, 360),     // abajo del cruce
+        ESTE(460, 295),    // derecha del cruce
+        OESTE(340, 295);   // izquierda del cruce
+
+
         public final double posX, posY;
         
         DireccionCruce(double posX, double posY) {

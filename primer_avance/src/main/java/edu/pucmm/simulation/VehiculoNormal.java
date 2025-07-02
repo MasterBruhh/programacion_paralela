@@ -29,43 +29,10 @@ public class VehiculoNormal extends Vehiculo {
     @Override
     protected void executeTypeSpecificLogic() {
         // lógica específica para vehículos normales
-        
-        // cambiar dirección ocasionalmente
-        if (shouldChangeDirection()) {
-            changeDirectionRandomly();
-        }
-        
         // ajustar velocidad basándose en condiciones
         adjustVelocity();
     }
-    
-    /**
-     * Determina si el vehículo debería cambiar de dirección.
-     */
-    private boolean shouldChangeDirection() {
-        long currentTime = System.currentTimeMillis();
-        if (currentTime - lastDirectionChange < DIRECTION_CHANGE_COOLDOWN) {
-            return false;
-        }
-        
-        // 2% de probabilidad por tick de cambiar dirección
-        return ThreadLocalRandom.current().nextDouble() < 0.02;
-    }
-    
-    /**
-     * Cambia la dirección aleatoriamente.
-     */
-    private void changeDirectionRandomly() {
-        Direccion[] direcciones = Direccion.values();
-        Direccion nuevaDireccion = direcciones[ThreadLocalRandom.current().nextInt(direcciones.length)];
-        
-        // evitar vuelta en u muy frecuente
-        if (nuevaDireccion != Direccion.vuelta_u || ThreadLocalRandom.current().nextDouble() < 0.1) {
-            this.direccion = nuevaDireccion;
-            this.lastDirectionChange = System.currentTimeMillis();
-        }
-    }
-    
+
     /**
      * Ajusta la velocidad basándose en condiciones del entorno.
      */

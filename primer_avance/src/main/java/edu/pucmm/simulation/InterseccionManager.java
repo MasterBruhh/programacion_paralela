@@ -151,4 +151,5 @@ public class InterseccionManager {
     public void removerVehiculoEnEspera(String vehiculoId) {
         vehiculosEnEspera.remove(vehiculoId);
     }
+
 } 

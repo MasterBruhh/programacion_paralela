@@ -21,7 +21,8 @@ public abstract class Vehiculo implements Runnable {
         GIRA_DERECHA,
         GIRA_IZQUIERDA,
         AVANZA_DENTRO_CRUCE,
-        GIRA_IZQUIERDA_2 }
+        GIRA_IZQUIERDA_2,
+        DETENIDO}
     protected FaseMovimiento faseMovimiento = FaseMovimiento.AVANZANDO;
 
     protected final String id;

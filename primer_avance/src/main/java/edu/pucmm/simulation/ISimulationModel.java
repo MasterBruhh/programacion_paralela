@@ -48,4 +48,6 @@ public interface ISimulationModel {
      * @return true si está cerca de una intersección, false en caso contrario
      */
     boolean estaCercaDeInterseccion(String vehiculoId, double posX, double posY);
+
+    boolean esPrimerEnFila(String id, double v, double v1);
 }

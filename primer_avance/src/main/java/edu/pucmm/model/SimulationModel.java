@@ -1,5 +1,8 @@
 package edu.pucmm.model;
 
+import edu.pucmm.simulation.CruceManager;
+import edu.pucmm.simulation.InterseccionManager;
+import edu.pucmm.simulation.Vehiculo;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableMap;
 
@@ -88,4 +91,4 @@ public class SimulationModel {
         }
     }
 
-} 
+}

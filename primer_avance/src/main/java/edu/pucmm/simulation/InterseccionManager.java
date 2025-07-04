@@ -2,6 +2,8 @@ package edu.pucmm.simulation;
 
 import edu.pucmm.model.TipoVehiculo;
 
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -18,7 +20,7 @@ public class InterseccionManager {
     private final Semaphore cruce;
     private final PriorityBlockingQueue<VehiculoWaiting> colaEspera;
     private final AtomicInteger vehiculosProcessed = new AtomicInteger(0);
-    
+    private final Queue<String> vehiculosEnEspera = new ConcurrentLinkedQueue<>();
     // tiempos de cruce en milisegundos
     private static final long TIEMPO_CRUCE_NORMAL = 800;
     private static final long TIEMPO_CRUCE_EMERGENCIA = 400;
@@ -38,7 +40,7 @@ public class InterseccionManager {
             return Long.compare(v1.timestampLlegada(), v2.timestampLlegada());
         });
     }
-    
+
     /**
      * Solicita permiso para cruzar la intersección.
      * Implementa el patrón acquire/release con manejo de prioridades.
@@ -49,43 +51,39 @@ public class InterseccionManager {
      */
     public void solicitarCruce(String vehiculoId, TipoVehiculo tipo) throws InterruptedException {
         long timestampLlegada = System.currentTimeMillis();
-        
+
         logger.info("🚗 vehículo " + vehiculoId + " (" + tipo + ") solicita cruzar intersección " + id);
-        
-        // registrar llegada en la cola de espera
+
         VehiculoWaiting vehiculoWaiting = new VehiculoWaiting(vehiculoId, tipo, timestampLlegada);
         colaEspera.offer(vehiculoWaiting);
-        
+
+        // Add to vehiculosEnEspera if not already present
+        if (!vehiculosEnEspera.contains(vehiculoId)) {
+            vehiculosEnEspera.offer(vehiculoId);
+        }
+
         try {
-            // adquirir permiso para cruzar
             cruce.acquire();
-            
-            // verificar que somos el próximo en la cola (por si hay prioridades)
             VehiculoWaiting proximo = colaEspera.peek();
             while (proximo != null && !proximo.vehiculoId().equals(vehiculoId)) {
-                // si no somos el próximo, liberar y volver a esperar
                 cruce.release();
-                Thread.sleep(50); // pequeña pausa antes de reintentar
+                Thread.sleep(50);
                 cruce.acquire();
                 proximo = colaEspera.peek();
             }
-            
-            // remover de la cola de espera
             colaEspera.remove(vehiculoWaiting);
-            
+
             logger.info("✅ vehículo " + vehiculoId + " inicia cruce de intersección " + id);
-            
-            // simular tiempo de cruce
-            long tiempoCruce = (tipo == TipoVehiculo.emergencia) ? 
-                              TIEMPO_CRUCE_EMERGENCIA : TIEMPO_CRUCE_NORMAL;
+
+            long tiempoCruce = (tipo == TipoVehiculo.emergencia) ?
+                    TIEMPO_CRUCE_EMERGENCIA : TIEMPO_CRUCE_NORMAL;
             Thread.sleep(tiempoCruce);
-            
+
             vehiculosProcessed.incrementAndGet();
-            logger.info("🏁 vehículo " + vehiculoId + " completó cruce de intersección " + id + 
-                       " (total procesados: " + vehiculosProcessed.get() + ")");
-            
+            logger.info("🏁 vehículo " + vehiculoId + " completó cruce de intersección " + id +
+                    " (total procesados: " + vehiculosProcessed.get() + ")");
+
         } finally {
-            // CRÍTICO: liberar permiso en bloque finally para evitar deadlocks
             cruce.release();
         }
     }
@@ -126,7 +124,11 @@ public class InterseccionManager {
     public String getId() {
         return id;
     }
-    
+
+    public boolean esPrimerEnFila(String vehiculoId) {
+        return vehiculosEnEspera.peek() != null && vehiculosEnEspera.peek().equals(vehiculoId);
+    }
+
     /**
      * Record para representar un vehículo esperando en la cola.
      */
@@ -145,4 +147,8 @@ public class InterseccionManager {
         int vehiculosEnEspera,
         int vehiculosProcessed
     ) {}
+
+    public void removerVehiculoEnEspera(String vehiculoId) {
+        vehiculosEnEspera.remove(vehiculoId);
+    }
 } 

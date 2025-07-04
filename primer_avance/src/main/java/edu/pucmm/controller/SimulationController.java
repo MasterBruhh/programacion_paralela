@@ -46,7 +46,7 @@ public class SimulationController {
             Platform.runLater(() -> {
                 lienzo.getChildren().removeIf(n -> n instanceof Circle && !"stop".equals(n.getId())); // limpiar solo vehículos
                 for (VehiculoState v : snapshot.values()) {
-                    Circle vehiculo = new Circle(10, v.tipo() == TipoVehiculo.emergencia ? Color.RED : Color.BLUE);
+                    Circle vehiculo = new Circle(10, v.tipo() == TipoVehiculo.emergencia ? Color.WHITE : Color.BLUE);
                     vehiculo.setCenterX(v.posX());
                     vehiculo.setCenterY(v.posY());
                     lienzo.getChildren().add(vehiculo);
@@ -108,45 +108,25 @@ public class SimulationController {
         System.out.printf("Parámetros: Salida=%s, Tipo=%s, Dirección=%s\n",
                 salidaSeleccionada, tipoVehiculoSeleccionado, direccionSeleccionada);
 
-        // Lógica de ejemplo para crear y mostrar el vehículo
-        Circle vehiculo = new Circle(10); // Crea un círculo como representación visual
+        // Consigue coordenadas iniciales desde la fábrica
+        double[] coords = VehiculoFactory.getStartingCoordinates(salidaSeleccionada);
 
-        // Define el color basado en el tipo
-        if ("emergencia".equals(tipoVehiculoSeleccionado.toString())) {
-            vehiculo.setFill(Color.WHITE); // Los vehículos de emergencia son azules
-        } else {
-            vehiculo.setFill(Color.BLUE); // Los normales son negros
-        }
-
-        // Define la posición inicial basado en el punto de salida
-        switch (salidaSeleccionada) {
-            case ARRIBA:
-                vehiculo.setCenterX(380);
-                vehiculo.setCenterY(15);
-                break;
-            case ABAJO:
-                vehiculo.setCenterX(420);
-                vehiculo.setCenterY(585);
-                break;
-            case IZQUIERDA:
-                vehiculo.setCenterX(15);
-                vehiculo.setCenterY(310);
-                break;
-            case DERECHA:
-                vehiculo.setCenterX(785);
-                vehiculo.setCenterY(280);
-                break;
-        }
-
-        // Añade el vehículo al lienzo para que sea visible
+        // Crea y muestra el círculo en la posición real de simulación
+        Circle vehiculo = new Circle(10);
+        vehiculo.setFill(tipoVehiculoSeleccionado == TipoVehiculo.emergencia ? Color.WHITE : Color.BLUE);
+        vehiculo.setCenterX(coords[0]);
+        vehiculo.setCenterY(coords[1]);
         lienzo.getChildren().add(vehiculo);
+
+        // Crea el objeto de simulación con las mismas coordenadas
         Vehiculo vehiculoE = VehiculoFactory.createConfiguredVehicle(
                 tipoVehiculoSeleccionado,
                 salidaSeleccionada,
                 direccionSeleccionada,
-                modelo
+                modelo,
+                coords[0],
+                coords[1]
         );
-        new Thread(vehiculoE).start();
         vehiculosActivos.add(vehiculoE);
 
         // Muestra una alerta de confirmación
@@ -158,10 +138,6 @@ public class SimulationController {
                 salidaSeleccionada,
                 direccionSeleccionada));
         alert.showAndWait();
-
-        // Aquí deberías añadir la lógica para que el vehículo se mueva.
-        // Por ejemplo, podrías añadir el objeto a una lista de 'vehiculosActivos'
-        // y tu bucle de simulación (handlePlay) se encargaría de moverlo.
     }
 
 

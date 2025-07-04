@@ -172,5 +172,10 @@ public class VehiculoDemoSimple {
             // en demo simple no hay intersecciones
             return false;
         }
+
+        @Override
+        public boolean esPrimerEnFila(String id, double v, double v1) {
+            return false;
+        }
     }
 }

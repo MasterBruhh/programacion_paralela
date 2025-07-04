@@ -1,5 +1,6 @@
 package edu.pucmm.simulation;
 
+import edu.pucmm.model.PuntoSalida;
 import edu.pucmm.model.SimulationModel;
 import edu.pucmm.model.TipoVehiculo;
 
@@ -67,13 +68,14 @@ public class CruceEscenario1Demo {
             double posX = direccion.posX + (Math.random() - 0.5) * 20 - (direccion.posX > 0 ? 30 : -30);
             double posY = direccion.posY + (Math.random() - 0.5) * 20 - (direccion.posY > 0 ? 30 : -30);
             
-            Direccion direccionMovimiento = determinarDireccionMovimiento(direccion);
-            
+            Direccion direccionMovimiento = determinarDireccionMovimiento(direccion,vehiculos[i]);
+            PuntoSalida puntoSalida = vehiculos[i].getPuntoSalida();
             vehiculos[i] = new VehiculoNormal(
                 "NORMAL-" + String.format("%02d", i + 1),
                 posX, posY,
                 direccionMovimiento,
-                cruceModel
+                cruceModel,
+                puntoSalida
             );
         }
         
@@ -89,26 +91,52 @@ public class CruceEscenario1Demo {
             double posX = direccion.posX + (Math.random() - 0.5) * 15 - (direccion.posX > 0 ? 40 : -40);
             double posY = direccion.posY + (Math.random() - 0.5) * 15 - (direccion.posY > 0 ? 40 : -40);
             
-            Direccion direccionMovimiento = determinarDireccionMovimiento(direccion);
-            
+            Direccion direccionMovimiento = determinarDireccionMovimiento(direccion,vehiculos[i]);
+            PuntoSalida puntoSalida = vehiculos[i].getPuntoSalida();
             vehiculos[i] = new VehiculoEmergencia(
                 "EMG-" + String.format("%02d", i + 1),
                 posX, posY,
                 direccionMovimiento,
-                cruceModel
+                cruceModel,puntoSalida
             );
         }
         
         return vehiculos;
     }
-    
-    private static Direccion determinarDireccionMovimiento(CruceManager.DireccionCruce direccionCruce) {
-        return switch (direccionCruce) {
-            case NORTE -> Direccion.recto;
-            case SUR -> Direccion.vuelta_u;
-            case ESTE -> Direccion.izquierda;
-            case OESTE -> Direccion.derecha;
-        };
+
+    private static Direccion determinarDireccionMovimiento(CruceManager.DireccionCruce direccionCruce, Vehiculo vehiculo) {
+        switch (vehiculo.puntoSalida) {
+            case ABAJO:
+                return switch (direccionCruce) {
+                    case NORTE -> Direccion.recto;
+                    case SUR -> Direccion.vuelta_u;
+                    case ESTE -> Direccion.izquierda;
+                    case OESTE -> Direccion.derecha;
+                };
+            case ARRIBA:
+                return switch (direccionCruce) {
+                    case SUR -> Direccion.recto;
+                    case NORTE -> Direccion.vuelta_u;
+                    case OESTE -> Direccion.izquierda;
+                    case ESTE -> Direccion.derecha;
+                };
+            case DERECHA:
+                return switch (direccionCruce) {
+                    case OESTE -> Direccion.recto;
+                    case ESTE -> Direccion.vuelta_u;
+                    case SUR -> Direccion.izquierda;
+                    case NORTE -> Direccion.derecha;
+                };
+            case IZQUIERDA:
+                return switch (direccionCruce) {
+                    case ESTE -> Direccion.recto;
+                    case OESTE -> Direccion.vuelta_u;
+                    case NORTE -> Direccion.izquierda;
+                    case SUR -> Direccion.derecha;
+                };
+            default:
+                throw new IllegalArgumentException("Punto de salida desconocido: " + vehiculo.puntoSalida);
+        }
     }
     
     private static Thread[] iniciarVehiculos(Vehiculo[] vehiculos, String tipo) {
@@ -219,5 +247,7 @@ public class CruceEscenario1Demo {
                            ", Emergencia: " + vehiculosEmergencia + ")");
             }
         }
+
     }
+
 } 

@@ -25,14 +25,15 @@ public class VehiculoFactory {
             TipoVehiculo tipo,
             PuntoSalida salida,
             Direccion direccion,
-            ISimulationModel simulationModel) {
+            ISimulationModel simulationModel,
+            double posX,
+            double posY) {
 
         String id = generateVehicleId();
-        double[] coords = getStartingCoordinates(salida);
 
         return switch (tipo) {
-            case normal -> new VehiculoNormal(id, coords[0], coords[1], direccion, simulationModel);
-            case emergencia -> new VehiculoEmergencia(id, coords[0], coords[1], direccion, simulationModel);
+            case normal -> new VehiculoNormal(id, posX, posY, direccion, simulationModel, salida);
+            case emergencia -> new VehiculoEmergencia(id, posX, posY, direccion, simulationModel, salida);
         };
     }
 
@@ -46,12 +47,12 @@ public class VehiculoFactory {
     /**
      * Devuelve las coordenadas de inicio según el punto de salida.
      */
-    private static double[] getStartingCoordinates(PuntoSalida salida) {
+    public static double[] getStartingCoordinates(PuntoSalida salida) {
         return switch (salida) {
-            case ARRIBA -> new double[]{400, 0};      // Entra desde arriba
-            case ABAJO -> new double[]{400, 600};     // Entra desde abajo
-            case IZQUIERDA -> new double[]{0, 300};   // Entra desde izquierda
-            case DERECHA -> new double[]{800, 300};   // Entra desde derecha
+            case ARRIBA -> new double[]{375, 10};      // Entra desde arriba
+            case ABAJO -> new double[]{420, 590};     // Entra desde abajo
+            case IZQUIERDA -> new double[]{10, 320};   // Entra desde izquierda
+            case DERECHA -> new double[]{790, 270};   // Entra desde derecha
         };
     }
 

@@ -1,5 +1,6 @@
 package edu.pucmm.simulation;
 
+import edu.pucmm.model.PuntoSalida;
 import edu.pucmm.model.TipoVehiculo;
 
 import java.util.concurrent.ThreadLocalRandom;
@@ -10,16 +11,13 @@ import java.util.concurrent.ThreadLocalRandom;
  */
 public class VehiculoNormal extends Vehiculo {
     
-    private static final double VELOCIDAD_MIN = 0.5;
-    private static final double VELOCIDAD_MAX = 2.0;
-    
-    private long lastDirectionChange = 0;
-    private static final long DIRECTION_CHANGE_COOLDOWN = 5000; // 5 segundos
-    
-    public VehiculoNormal(String id, double posX, double posY, Direccion direccion, 
-                         ISimulationModel simulationModel) {
+    private static final double VELOCIDAD_MIN = 10.0;
+    private static final double VELOCIDAD_MAX = 40.0;
+
+    public VehiculoNormal(String id, double posX, double posY, Direccion direccion,
+                          ISimulationModel simulationModel, PuntoSalida puntoSalida) {
         super(id, TipoVehiculo.normal, posX, posY, 
-              generateRandomVelocity(), direccion, simulationModel);
+              generateRandomVelocity(), direccion, simulationModel,puntoSalida);
     }
     
     private static double generateRandomVelocity() {
@@ -28,9 +26,16 @@ public class VehiculoNormal extends Vehiculo {
     
     @Override
     protected void executeTypeSpecificLogic() {
-        // lógica específica para vehículos normales
-        // ajustar velocidad basándose en condiciones
         adjustVelocity();
+        if (!cruzariaLineaDeParada(posX, posY)) {
+            CruceManager.DireccionCruce direccion = ((CruceSimulationModel) simulationModel)
+                    .getCruceManager()
+                    .determinarInterseccionMasCercana(posX, posY);
+            ((CruceSimulationModel) simulationModel)
+                    .getCruceManager()
+                    .getInterseccionManager(direccion)
+                    .removerVehiculoEnEspera(id);
+        }
     }
 
     /**

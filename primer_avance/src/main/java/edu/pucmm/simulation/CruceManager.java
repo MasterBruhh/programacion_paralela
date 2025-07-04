@@ -22,7 +22,7 @@ public class CruceManager {
     private static final Logger logger = Logger.getLogger(CruceManager.class.getName());
     
     private final String id;
-    private final Map<DireccionCruce, InterseccionManager> intersecciones;
+    final Map<DireccionCruce, InterseccionManager> intersecciones;
     private final ColisionDetector colisionDetector;
     
     /**
@@ -172,4 +172,15 @@ public class CruceManager {
         int totalVehiculosProcessed,
         boolean tieneVehiculosEsperando
     ) {}
+
+    public boolean esPrimerEnFila(String vehiculoId, CruceManager.DireccionCruce direccion) {
+        InterseccionManager interseccion = intersecciones.get(direccion);
+        if (interseccion == null) {
+            throw new IllegalArgumentException("Dirección de entrada inválida: " + direccion);
+        }
+        return interseccion.esPrimerEnFila(vehiculoId);
+    }
+    public InterseccionManager getInterseccionManager(CruceManager.DireccionCruce direccion) {
+        return intersecciones.get(direccion);
+    }
 } 

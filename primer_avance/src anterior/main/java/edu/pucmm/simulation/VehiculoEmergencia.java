@@ -14,20 +14,21 @@ public class VehiculoEmergencia extends Vehiculo {
     
     private static final Logger logger = Logger.getLogger(VehiculoEmergencia.class.getName());
     
-    private static final double VELOCIDAD_UNIFICADA = 30.0; // misma velocidad que los normales
+    private static final double VELOCIDAD_MIN = 20.0;
+    private static final double VELOCIDAD_MAX = 60.0;
     private static final long SIRENA_INTERVAL = 2000; // notificar presencia cada 2 segundos
     
     private long lastSirenaNotification = 0;
     private boolean sirenActive = true;
     
     public VehiculoEmergencia(String id, double posX, double posY, Direccion direccion,
-                              ISimulationModel simulationModel, PuntoSalida puntoSalida, long timestampCreacion) {
+                              ISimulationModel simulationModel, PuntoSalida puntoSalida) {
         super(id, TipoVehiculo.emergencia, posX, posY, 
-              VELOCIDAD_UNIFICADA, direccion, simulationModel, puntoSalida, timestampCreacion);
+              generateRandomVelocity(), direccion, simulationModel,puntoSalida);
     }
     
     private static double generateRandomVelocity() {
-        return VELOCIDAD_UNIFICADA; // ya no es aleatoria
+        return ThreadLocalRandom.current().nextDouble(VELOCIDAD_MIN, VELOCIDAD_MAX);
     }
     
     @Override
@@ -35,7 +36,8 @@ public class VehiculoEmergencia extends Vehiculo {
         // notificar presencia con sirena
         notifyPresence();
         
-        // ya no ajustamos velocidad - todos tienen la misma
+        // mantener velocidad alta
+        maintainEmergencySpeed();
     }
     
     /**
@@ -47,6 +49,16 @@ public class VehiculoEmergencia extends Vehiculo {
             logger.info("🚨 VEHÍCULO DE EMERGENCIA " + id + " EN POSICIÓN (" + 
                        String.format("%.1f", posX) + ", " + String.format("%.1f", posY) + ")");
             lastSirenaNotification = currentTime;
+        }
+    }
+    
+    /**
+     * Mantiene velocidad de emergencia.
+     */
+    private void maintainEmergencySpeed() {
+        // los vehículos de emergencia tienden a mantener velocidad alta
+        if (this.velocidad < VELOCIDAD_MAX * 0.8) {
+            this.velocidad = Math.min(VELOCIDAD_MAX, this.velocidad * 1.2);
         }
     }
     

@@ -11,33 +11,47 @@ import java.util.concurrent.ThreadLocalRandom;
  */
 public class VehiculoNormal extends Vehiculo {
     
-    private static final double VELOCIDAD_UNIFICADA = 30.0; // misma velocidad para todos
+    private static final double VELOCIDAD_MIN = 10.0;
+    private static final double VELOCIDAD_MAX = 40.0;
 
     public VehiculoNormal(String id, double posX, double posY, Direccion direccion,
-                          ISimulationModel simulationModel, PuntoSalida puntoSalida, long timestampCreacion) {
+                          ISimulationModel simulationModel, PuntoSalida puntoSalida) {
         super(id, TipoVehiculo.normal, posX, posY, 
-              VELOCIDAD_UNIFICADA, direccion, simulationModel, puntoSalida, timestampCreacion);
+              generateRandomVelocity(), direccion, simulationModel,puntoSalida);
     }
     
     private static double generateRandomVelocity() {
-        return VELOCIDAD_UNIFICADA; // ya no es aleatoria
+        return ThreadLocalRandom.current().nextDouble(VELOCIDAD_MIN, VELOCIDAD_MAX);
     }
     
     @Override
     protected void executeTypeSpecificLogic() {
-        // La lógica de ajuste de velocidad ahora es manejada por ajustarVelocidadPreventiva().
-        // La lógica anterior aquí reiniciaba la velocidad y removía incorrectamente
-        // el vehículo de la cola de espera, causando el bug.
-        // Dejar este método vacío asegura que los vehículos normales y de emergencia
-        // sigan el mismo flujo de movimiento base.
+        adjustVelocity();
+        if (!cruzariaLineaDeParada(posX, posY)) {
+            CruceManager.DireccionCruce direccion = ((CruceSimulationModel) simulationModel)
+                    .getCruceManager()
+                    .determinarInterseccionMasCercana(posX, posY);
+            ((CruceSimulationModel) simulationModel)
+                    .getCruceManager()
+                    .getInterseccionManager(direccion)
+                    .removerVehiculoEnEspera(id);
+        }
     }
 
     /**
      * Ajusta la velocidad basándose en condiciones del entorno.
      */
     private void adjustVelocity() {
-        // mantener velocidad constante - todos los vehículos tienen la misma velocidad
-        this.velocidad = VELOCIDAD_UNIFICADA;
+        // simulación simple: reducir velocidad ocasionalmente (tráfico, semáforos, etc.)
+        if (ThreadLocalRandom.current().nextDouble() < 0.05) { // 5% probabilidad
+            // reducir velocidad temporalmente
+            double factor = ThreadLocalRandom.current().nextDouble(0.5, 0.8);
+            this.velocidad = Math.max(VELOCIDAD_MIN, this.velocidad * factor);
+        } else if (ThreadLocalRandom.current().nextDouble() < 0.03) { // 3% probabilidad
+            // acelerar gradualmente
+            double factor = ThreadLocalRandom.current().nextDouble(1.1, 1.3);
+            this.velocidad = Math.min(VELOCIDAD_MAX, this.velocidad * factor);
+        }
     }
     
     @Override
@@ -64,4 +78,3 @@ public class VehiculoNormal extends Vehiculo {
                            id, posX, posY, velocidad, direccion);
     }
 }
- 

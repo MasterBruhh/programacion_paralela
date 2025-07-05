@@ -33,8 +33,7 @@ class VehiculoAgenteTest {
     void testVehiculoNormalComoAgente() throws InterruptedException {
         // crear vehículo normal
         VehiculoNormal vehiculo = new VehiculoNormal("TEST-001", 10.0, 20.0,
-                                                   Direccion.derecha, testModel, PuntoSalida.IZQUIERDA, 
-                                                   System.currentTimeMillis());
+                                                   Direccion.derecha, testModel);
 
         // verificar estado inicial
         assertEquals("TEST-001", vehiculo.getId());
@@ -67,8 +66,7 @@ class VehiculoAgenteTest {
     @DisplayName("vehículo de emergencia debe tener comportamiento especial")
     void testVehiculoEmergenciaComportamiento() throws InterruptedException {
         VehiculoEmergencia vehiculo = new VehiculoEmergencia("EMG-001", 0.0, 0.0,
-                                                            Direccion.recto, testModel, PuntoSalida.ABAJO,
-                                                            System.currentTimeMillis());
+                                                            Direccion.recto, testModel, PuntoSalida.ABAJO);
 
         assertEquals(TipoVehiculo.emergencia, vehiculo.getTipo());
         assertTrue(vehiculo.isSirenActive());
@@ -88,60 +86,37 @@ class VehiculoAgenteTest {
     }
 
     @Test
-    @DisplayName("factory debe crear vehículos configurados correctamente")
+    @DisplayName("factory debe crear vehículos con parámetros correctos")
     void testVehiculoFactory() {
-        // crear vehículo configurado
-        Vehiculo vehiculo1 = VehiculoFactory.createConfiguredVehicle(
-            TipoVehiculo.normal,
-            PuntoSalida.ARRIBA,
-            Direccion.recto,
-            testModel,
-            100.0,
-            200.0
-        );
-        
+        // crear vehículo aleatorio
+        Vehiculo vehiculo1 = VehiculoFactory.createRandomVehicle(testModel);
         assertNotNull(vehiculo1);
         assertNotNull(vehiculo1.getId());
         assertTrue(vehiculo1.getId().startsWith("VEH-"));
-        assertEquals(TipoVehiculo.normal, vehiculo1.getTipo());
-        assertEquals(100.0, vehiculo1.getPosX());
-        assertEquals(200.0, vehiculo1.getPosY());
 
-        // crear vehículo de emergencia
-        Vehiculo vehiculo2 = VehiculoFactory.createConfiguredVehicle(
-            TipoVehiculo.emergencia,
-            PuntoSalida.ABAJO,
-            Direccion.izquierda,
-            testModel,
-            300.0,
-            400.0
-        );
-        
+        // crear vehículo específico
+        Vehiculo vehiculo2 = VehiculoFactory.createVehicle(TipoVehiculo.emergencia, testModel);
         assertEquals(TipoVehiculo.emergencia, vehiculo2.getTipo());
-        assertEquals(300.0, vehiculo2.getPosX());
-        assertEquals(400.0, vehiculo2.getPosY());
+
+        // crear flota
+        Vehiculo[] flota = VehiculoFactory.createFleet(10, 0.3, testModel);
+        assertEquals(10, flota.length);
+
+        long emergencyCount = java.util.Arrays.stream(flota)
+                .filter(v -> v.getTipo() == TipoVehiculo.emergencia)
+                .count();
+
+        // debería haber aproximadamente 30% de vehículos de emergencia (3 de 10)
+        assertTrue(emergencyCount >= 2 && emergencyCount <= 4,
+                  "flota debería tener ~30% vehículos de emergencia");
     }
 
     @Test
     @DisplayName("múltiples vehículos deben ejecutar en paralelo")
     void testEjecucionParalela() throws InterruptedException {
         int numVehiculos = 5;
-        Vehiculo[] vehiculos = new Vehiculo[numVehiculos];
+        Vehiculo[] vehiculos = VehiculoFactory.createMultipleVehicles(numVehiculos, testModel);
         Thread[] hilos = new Thread[numVehiculos];
-
-        // crear vehículos manualmente
-        for (int i = 0; i < numVehiculos; i++) {
-            PuntoSalida[] puntos = PuntoSalida.values();
-            TipoVehiculo tipo = (i % 2 == 0) ? TipoVehiculo.normal : TipoVehiculo.emergencia;
-            vehiculos[i] = VehiculoFactory.createConfiguredVehicle(
-                tipo,
-                puntos[i % puntos.length],
-                Direccion.recto,
-                testModel,
-                50.0 + i * 20,
-                100.0 + i * 20
-            );
-        }
 
         // iniciar todos los vehículos
         for (int i = 0; i < numVehiculos; i++) {
@@ -174,8 +149,7 @@ class VehiculoAgenteTest {
     @DisplayName("control de pausa y reanudación debe funcionar")
     void testControlPausaReanudacion() throws InterruptedException {
         VehiculoNormal vehiculo = new VehiculoNormal("PAUSE-TEST", 0.0, 0.0,
-                                                   Direccion.derecha, testModel, PuntoSalida.DERECHA,
-                                                   System.currentTimeMillis());
+                                                   Direccion.derecha, testModel);
 
         Thread vehiculoThread = new Thread(vehiculo);
         vehiculoThread.start();
@@ -212,8 +186,7 @@ class VehiculoAgenteTest {
     @DisplayName("vehículos deben calcular movimiento correctamente")
     void testCalculoMovimiento() throws InterruptedException {
         VehiculoNormal vehiculo = new VehiculoNormal("MOV-TEST", 50.0, 50.0,
-                                                   Direccion.derecha, testModel, PuntoSalida.ARRIBA,
-                                                   System.currentTimeMillis());
+                                                   Direccion.derecha, testModel);
 
         double posXInicial = vehiculo.getPosX();
         double posYInicial = vehiculo.getPosY();
@@ -281,4 +254,3 @@ class VehiculoAgenteTest {
         }
     }
 }
- 

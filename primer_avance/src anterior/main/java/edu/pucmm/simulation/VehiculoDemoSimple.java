@@ -167,16 +167,15 @@ public class VehiculoDemoSimple {
             logger.info("demo simple: ignorando solicitud de cruce para " + vehiculoId);
         }
         
-        public void liberarCruceInterseccion(String vehiculoId, double vehiculoPosX, double vehiculoPosY) {
-            // implementación vacía para demo simple
-            logger.info("demo simple: ignorando liberación de cruce para " + vehiculoId);
-        }
-        
         @Override
         public boolean estaCercaDeInterseccion(String vehiculoId, double posX, double posY) {
             // en demo simple no hay intersecciones
             return false;
         }
+
+        @Override
+        public boolean esPrimerEnFila(String id, double v, double v1) {
+            return false;
+        }
     }
 }
- 

@@ -23,7 +23,9 @@ public class CruceManager {
     
     private final String id;
     final Map<DireccionCruce, InterseccionManager> intersecciones;
+    private final Map<DireccionCruce, CalleQueue> colasPorCalle;
     private final ColisionDetector colisionDetector;
+    private final CruceCoordinador coordinadorGlobal;
     
     /**
      * Direcciones de entrada al cruce.
@@ -46,12 +48,14 @@ public class CruceManager {
     public CruceManager(String id) {
         this.id = id;
         this.intersecciones = new ConcurrentHashMap<>();
+        this.colasPorCalle = new ConcurrentHashMap<>();
         this.colisionDetector = new ColisionDetector();
+        this.coordinadorGlobal = new CruceCoordinador(id);
         
         // crear las 4 intersecciones del cruce
         inicializarIntersecciones();
         
-        logger.info("✅ CruceManager " + id + " inicializado con 4 intersecciones");
+        logger.info("✅ CruceManager " + id + " inicializado con 4 intersecciones y coordinador global");
     }
     
     /**
@@ -62,11 +66,90 @@ public class CruceManager {
             String interseccionId = id + "-" + direccion.name().toLowerCase();
             InterseccionManager interseccion = new InterseccionManager(interseccionId);
             intersecciones.put(direccion, interseccion);
+            
+            // crear cola para esta calle
+            String calleId = "calle-" + direccion.name().toLowerCase();
+            CalleQueue cola = new CalleQueue(calleId, direccion);
+            colasPorCalle.put(direccion, cola);
         }
     }
     
     /**
+     * Agrega un vehículo a la cola de la calle correspondiente.
+     * También lo registra en el coordinador global para respetar orden de creación.
+     * 
+     * @param vehiculoId ID del vehículo
+     * @param timestampCreacion timestamp de cuando se creó el vehículo
+     * @param direccion dirección desde la que se aproxima
+     * @return posición en la cola
+     */
+    public int agregarVehiculoACola(String vehiculoId, long timestampCreacion, DireccionCruce direccion) {
+        CalleQueue cola = colasPorCalle.get(direccion);
+        if (cola == null) {
+            throw new IllegalArgumentException("dirección inválida: " + direccion);
+        }
+        
+        // Registrar en el coordinador global para orden de creación
+        coordinadorGlobal.registrarVehiculo(vehiculoId, timestampCreacion, TipoVehiculo.normal, direccion);
+        
+        return cola.agregarVehiculo(vehiculoId, timestampCreacion);
+    }
+    
+    /**
+     * Agrega un vehículo de emergencia con prioridad absoluta.
+     * También lo registra en el coordinador global con prioridad de emergencia.
+     * 
+     * @param vehiculoId ID del vehículo de emergencia
+     * @param timestampCreacion timestamp de cuando se creó el vehículo
+     * @param direccion dirección desde la que se aproxima
+     */
+    public void agregarVehiculoEmergenciaACola(String vehiculoId, long timestampCreacion, DireccionCruce direccion) {
+        CalleQueue cola = colasPorCalle.get(direccion);
+        if (cola == null) {
+            throw new IllegalArgumentException("dirección inválida: " + direccion);
+        }
+        
+        // Registrar en el coordinador global con prioridad de emergencia
+        coordinadorGlobal.registrarVehiculo(vehiculoId, timestampCreacion, TipoVehiculo.emergencia, direccion);
+        
+        cola.procesarVehiculoEmergencia(vehiculoId, timestampCreacion);
+    }
+    
+    /**
+     * Sobrecarga para compatibilidad con código existente.
+     */
+    public int agregarVehiculoACola(String vehiculoId, DireccionCruce direccion) {
+        CalleQueue cola = colasPorCalle.get(direccion);
+        if (cola == null) {
+            throw new IllegalArgumentException("dirección inválida: " + direccion);
+        }
+        
+        return cola.agregarVehiculo(vehiculoId);
+    }
+    
+    /**
+     * Obtiene la posición donde debe esperar un vehículo.
+     */
+    public double[] obtenerPosicionEspera(String vehiculoId, DireccionCruce direccion) {
+        CalleQueue cola = colasPorCalle.get(direccion);
+        if (cola == null) {
+            return null;
+        }
+        
+        return cola.obtenerPosicionEspera(vehiculoId);
+    }
+    
+    /**
+     * Verifica si un vehículo puede solicitar cruce (es el primero en su cola).
+     */
+    public boolean puedesolicitarCruce(String vehiculoId, DireccionCruce direccion) {
+        CalleQueue cola = colasPorCalle.get(direccion);
+        return cola != null && cola.esPrimero(vehiculoId);
+    }
+    
+    /**
      * Solicita cruzar el cruce desde una dirección específica.
+     * Ahora usa el coordinador global para respetar orden de creación.
      * 
      * @param vehiculoId ID del vehículo
      * @param tipo tipo del vehículo  
@@ -77,15 +160,36 @@ public class CruceManager {
                               DireccionCruce direccionEntrada) throws InterruptedException {
         
         InterseccionManager interseccion = intersecciones.get(direccionEntrada);
-        if (interseccion == null) {
+        CalleQueue cola = colasPorCalle.get(direccionEntrada);
+        
+        if (interseccion == null || cola == null) {
             throw new IllegalArgumentException("dirección de entrada inválida: " + direccionEntrada);
         }
         
-        logger.info("🚦 vehículo " + vehiculoId + " solicita cruzar desde " + direccionEntrada + 
-                   " en cruce " + id);
+        // 1. Verificar que es el primero en su cola local
+        if (!cola.esPrimero(vehiculoId)) {
+            logger.warning("vehículo " + vehiculoId + " no es el primero en la cola de " + 
+                         direccionEntrada + ", no puede cruzar aún");
+            return;
+        }
         
-        // delegar a la intersección específica
+        // 2. NUEVO: Verificar orden global de creación
+        if (!coordinadorGlobal.puedeProcedeSegunOrdenGlobal(vehiculoId)) {
+            logger.info("⏸️ vehículo " + vehiculoId + " debe esperar su turno según orden global de creación");
+            return;
+        }
+        
+        logger.info("🚦 vehículo " + vehiculoId + " solicita cruzar desde " + direccionEntrada + 
+                   " en cruce " + id + " (orden global respetado)");
+        
+        // 3. Solicitar permiso al coordinador global
+        coordinadorGlobal.solicitarCruceGlobal(vehiculoId, tipo);
+        
+        // 4. Si llegó aquí, tiene permiso global, proceder con intersección local
         interseccion.solicitarCruce(vehiculoId, tipo);
+        
+        // 5. Remover de la cola local después de obtener permisos
+        cola.removerVehiculo(vehiculoId);
     }
     
     /**
@@ -163,6 +267,10 @@ public class CruceManager {
         return id;
     }
     
+    public CruceCoordinador getCoordinadorGlobal() {
+        return coordinadorGlobal;
+    }
+    
     /**
      * Record para representar el estado completo del cruce.
      */
@@ -173,14 +281,28 @@ public class CruceManager {
         boolean tieneVehiculosEsperando
     ) {}
 
-    public boolean esPrimerEnFila(String vehiculoId, CruceManager.DireccionCruce direccion) {
-        InterseccionManager interseccion = intersecciones.get(direccion);
-        if (interseccion == null) {
-            throw new IllegalArgumentException("Dirección de entrada inválida: " + direccion);
-        }
-        return interseccion.esPrimerEnFila(vehiculoId);
-    }
     public InterseccionManager getInterseccionManager(CruceManager.DireccionCruce direccion) {
         return intersecciones.get(direccion);
+    }
+
+    /**
+     * Libera el cruce cuando un vehículo termina de cruzar.
+     * Ahora también libera el coordinador global.
+     * 
+     * @param vehiculoId ID del vehículo que termina
+     * @param direccionEntrada dirección desde la que entró el vehículo
+     */
+    public void liberarCruce(String vehiculoId, DireccionCruce direccionEntrada) {
+        InterseccionManager interseccion = intersecciones.get(direccionEntrada);
+        
+        if (interseccion != null) {
+            // Liberar intersección local
+            interseccion.liberarCruce(vehiculoId);
+            
+            // Liberar coordinador global
+            coordinadorGlobal.liberarCruceGlobal(vehiculoId);
+            
+            logger.info("🏁 vehículo " + vehiculoId + " liberó cruce desde " + direccionEntrada + " (global y local)");
+        }
     }
 } 

@@ -84,19 +84,31 @@ public class CruceSimulationModel implements ISimulationModel {
 
     @Override
     public boolean estaCercaDeInterseccion(String vehiculoId, double posX, double posY) {
-        // Verificar proximidad a cualquier intersección usando distancia simple
-        for (CruceManager.DireccionCruce direccion : CruceManager.DireccionCruce.values()) {
-            double distancia = Math.sqrt(
-                Math.pow(posX - direccion.posX, 2) + 
-                Math.pow(posY - direccion.posY, 2)
-            );
-            
-            if (distancia <= DISTANCIA_PROXIMIDAD_INTERSECCION) {
-                return true;
-            }
+        double centroX = 400, centroY = 295, halfIntersection = 45, buffer = 10;
+
+        PuntoSalida salida = puntoSalidaPorVehiculo.get(vehiculoId);
+        if (salida == null) {
+            return false;
         }
-        
-        return false;
+
+        switch (salida) {
+            case ARRIBA:
+                return posY >= (centroY - halfIntersection - buffer - 5) && posY < (centroY - halfIntersection + buffer);
+            case ABAJO:
+                return posY <= (centroY + halfIntersection + buffer + 5) && posY > (centroY + halfIntersection - buffer);
+            case IZQUIERDA:
+                return posX >= (centroX - halfIntersection - buffer - 5) && posX < (centroX - halfIntersection + buffer);
+            case DERECHA:
+                return posX <= (centroX + halfIntersection + buffer + 5) && posX > (centroX + halfIntersection - buffer);
+            default:
+                return false;
+        }
+    }
+
+    @Override
+    public boolean esPrimerEnFila(String id, double posX, double posY) {
+        CruceManager.DireccionCruce direccion = cruceManager.determinarInterseccionMasCercana(posX, posY);
+        return cruceManager.esPrimerEnFila(id, direccion);
     }
 
     public CruceManager.EstadoCruce getEstadoCruce() {
@@ -137,23 +149,5 @@ public class CruceSimulationModel implements ISimulationModel {
 
     public ColisionDetector getColisionDetector() {
         return colisionDetector;
-    }
-
-    /**
-     * Libera el cruce cuando el vehículo termina de cruzar.
-     * 
-     * @param vehiculoId ID del vehículo
-     * @param vehiculoPosX posición X actual
-     * @param vehiculoPosY posición Y actual
-     */
-    public void liberarCruceInterseccion(String vehiculoId, double vehiculoPosX, double vehiculoPosY) {
-        CruceManager.DireccionCruce direccionEntrada =
-                cruceManager.determinarInterseccionMasCercana(vehiculoPosX, vehiculoPosY);
-        
-        cruceManager.liberarCruce(vehiculoId, direccionEntrada);
-        
-        logger.info("🏁 vehículo " + vehiculoId + " liberó cruce en posición (" +
-                   String.format("%.2f", vehiculoPosX) + ", " +
-                   String.format("%.2f", vehiculoPosY) + ")");
     }
 }

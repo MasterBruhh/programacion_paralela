@@ -20,9 +20,7 @@ public class InterseccionManager {
     private final Semaphore cruce;
     private final PriorityBlockingQueue<VehiculoWaiting> colaEspera;
     private final AtomicInteger vehiculosProcessed = new AtomicInteger(0);
-    // LA SIGUIENTE COLA ES REDUNDANTE Y CAUSA BUGS. SERÁ ELIMINADA.
-    // private final Queue<String> vehiculosEnEspera = new ConcurrentLinkedQueue<>();
-    
+    private final Queue<String> vehiculosEnEspera = new ConcurrentLinkedQueue<>();
     // tiempos de cruce en milisegundos
     private static final long TIEMPO_CRUCE_NORMAL = 800;
     private static final long TIEMPO_CRUCE_EMERGENCIA = 400;
@@ -46,7 +44,6 @@ public class InterseccionManager {
     /**
      * Solicita permiso para cruzar la intersección.
      * Implementa el patrón acquire/release con manejo de prioridades.
-     * Ahora es no-bloqueante para permitir que el vehículo ejecute su movimiento.
      * 
      * @param vehiculoId ID del vehículo que solicita cruzar
      * @param tipo tipo del vehículo (normal o emergencia)
@@ -60,12 +57,10 @@ public class InterseccionManager {
         VehiculoWaiting vehiculoWaiting = new VehiculoWaiting(vehiculoId, tipo, timestampLlegada);
         colaEspera.offer(vehiculoWaiting);
 
-        /*
         // Add to vehiculosEnEspera if not already present
         if (!vehiculosEnEspera.contains(vehiculoId)) {
             vehiculosEnEspera.offer(vehiculoId);
         }
-        */
 
         try {
             cruce.acquire();
@@ -78,33 +73,18 @@ public class InterseccionManager {
             }
             colaEspera.remove(vehiculoWaiting);
 
-            logger.info("✅ vehículo " + vehiculoId + " obtuvo permiso para cruzar intersección " + id);
-            
-            vehiculosProcessed.incrementAndGet();
-            
-            // NO hacer Thread.sleep aquí - permitir que el vehículo continúe con su movimiento
-            // El vehículo liberará el semáforo cuando termine de cruzar
+            logger.info("✅ vehículo " + vehiculoId + " inicia cruce de intersección " + id);
 
-        } catch (Exception e) {
-            logger.warning("Error en solicitud de cruce para " + vehiculoId + ": " + e.getMessage());
-            throw e;
-        }
-        // NO liberar el semáforo aquí - se liberará cuando el vehículo termine el cruce
-    }
-    
-    /**
-     * Libera el permiso de cruce cuando el vehículo termina de cruzar.
-     * 
-     * @param vehiculoId ID del vehículo que termina de cruzar
-     */
-    public void liberarCruce(String vehiculoId) {
-        try {
+            long tiempoCruce = (tipo == TipoVehiculo.emergencia) ?
+                    TIEMPO_CRUCE_EMERGENCIA : TIEMPO_CRUCE_NORMAL;
+            Thread.sleep(tiempoCruce);
+
+            vehiculosProcessed.incrementAndGet();
+            logger.info("🏁 vehículo " + vehiculoId + " completó cruce de intersección " + id +
+                    " (total procesados: " + vehiculosProcessed.get() + ")");
+
+        } finally {
             cruce.release();
-            // vehiculosEnEspera.remove(vehiculoId);
-            logger.info("🏁 vehículo " + vehiculoId + " liberó intersección " + id + 
-                       " (total procesados: " + vehiculosProcessed.get() + ")");
-        } catch (Exception e) {
-            logger.warning("Error al liberar cruce para " + vehiculoId + ": " + e.getMessage());
         }
     }
     
@@ -145,11 +125,9 @@ public class InterseccionManager {
         return id;
     }
 
-    /*
     public boolean esPrimerEnFila(String vehiculoId) {
         return vehiculosEnEspera.peek() != null && vehiculosEnEspera.peek().equals(vehiculoId);
     }
-    */
 
     /**
      * Record para representar un vehículo esperando en la cola.
@@ -170,10 +148,8 @@ public class InterseccionManager {
         int vehiculosProcessed
     ) {}
 
-    /*
     public void removerVehiculoEnEspera(String vehiculoId) {
         vehiculosEnEspera.remove(vehiculoId);
     }
-    */
 
 } 

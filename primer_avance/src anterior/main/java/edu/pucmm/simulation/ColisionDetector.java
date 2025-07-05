@@ -3,7 +3,6 @@ package edu.pucmm.simulation;
 import edu.pucmm.model.VehiculoState;
 
 import java.util.Collection;
-import java.util.Optional;
 import java.util.logging.Logger;
 
 /**
@@ -16,8 +15,6 @@ public class ColisionDetector {
     // configuración de colisiones
     private static final double RADIO_SEGURIDAD_NORMAL = 3.0;
     private static final double RADIO_SEGURIDAD_EMERGENCIA = 2.0; // menor para más agilidad
-    private static final double DISTANCIA_SEGURIDAD_FILA = 15.0; // distancia cuando están en fila
-    private static final double TOLERANCIA_ALINEACION = 10.0; // tolerancia para considerar misma línea
     
     /**
      * Verifica si un vehículo puede moverse a una posición sin colisionar.
@@ -42,25 +39,18 @@ public class ColisionDetector {
             return true;
         }
         
+        double radioSeguridad = (vehiculoMovimiento.tipo() == edu.pucmm.model.TipoVehiculo.emergencia) ?
+                               RADIO_SEGURIDAD_EMERGENCIA : RADIO_SEGURIDAD_NORMAL;
+        
         // verificar colisión con todos los otros vehículos
         for (VehiculoState otroVehiculo : vehiculosActivos) {
             if (otroVehiculo.id().equals(vehiculoId)) {
                 continue; // no verificar colisión consigo mismo
             }
             
-            // usar radio base para cada vehículo
-            double radio1 = obtenerRadioSeguridad(vehiculoMovimiento);
-            double radio2 = obtenerRadioSeguridad(otroVehiculo);
-            
-            // si están claramente en la misma línea (fila), usar distancia mayor
-            if (estanClaramenteEnMismaLinea(vehiculoMovimiento, otroVehiculo)) {
-                radio1 = DISTANCIA_SEGURIDAD_FILA / 2;
-                radio2 = DISTANCIA_SEGURIDAD_FILA / 2;
-            }
-            
-            if (detectarColisionAABB(nextX, nextY, radio1,
+            if (detectarColisionAABB(nextX, nextY, radioSeguridad,
                                    otroVehiculo.posX(), otroVehiculo.posY(), 
-                                   radio2)) {
+                                   obtenerRadioSeguridad(otroVehiculo))) {
                 
                 logger.warning("⚠️ COLISIÓN DETECTADA: vehículo " + vehiculoId + 
                            " no puede moverse a (" + String.format("%.2f", nextX) + 
@@ -74,97 +64,6 @@ public class ColisionDetector {
         }
         
         return true;
-    }
-    
-    /**
-     * Verifica si dos vehículos están claramente en la misma línea (horizontal o vertical).
-     */
-    private boolean estanClaramenteEnMismaLinea(VehiculoState v1, VehiculoState v2) {
-        double deltaX = Math.abs(v1.posX() - v2.posX());
-        double deltaY = Math.abs(v1.posY() - v2.posY());
-        
-        // Están en línea horizontal si tienen casi la misma Y
-        if (deltaY < 5.0 && deltaX < 80.0) {
-            return true;
-        }
-        
-        // Están en línea vertical si tienen casi la misma X
-        if (deltaX < 5.0 && deltaY < 80.0) {
-            return true;
-        }
-        
-        return false;
-    }
-    
-    /**
-     * Detecta si hay un vehículo adelante en la misma línea.
-     */
-    public Optional<VehiculoState> detectarVehiculoAdelante(String vehiculoId, 
-                                                           double posX, double posY,
-                                                           double direccionX, double direccionY,
-                                                           Collection<VehiculoState> vehiculosActivos) {
-        
-        VehiculoState vehiculoActual = vehiculosActivos.stream()
-                .filter(v -> v.id().equals(vehiculoId))
-                .findFirst()
-                .orElse(null);
-                
-        if (vehiculoActual == null) return Optional.empty();
-        
-        VehiculoState vehiculoMasCercano = null;
-        double distanciaMasCercana = Double.MAX_VALUE;
-        
-        for (VehiculoState otro : vehiculosActivos) {
-            if (otro.id().equals(vehiculoId)) continue;
-            
-            // verificar si está adelante en la dirección de movimiento
-            double deltaX = otro.posX() - posX;
-            double deltaY = otro.posY() - posY;
-            
-            // producto punto para verificar si está adelante
-            double productoPunto = deltaX * direccionX + deltaY * direccionY;
-            
-            if (productoPunto > 0) { // está adelante
-                // verificar si está en la misma línea
-                if (estanEnMismaLinea(posX, posY, otro.posX(), otro.posY(), direccionX, direccionY)) {
-                    double distancia = calcularDistancia(posX, posY, otro.posX(), otro.posY());
-                    if (distancia < distanciaMasCercana) {
-                        distanciaMasCercana = distancia;
-                        vehiculoMasCercano = otro;
-                    }
-                }
-            }
-        }
-        
-        return Optional.ofNullable(vehiculoMasCercano);
-    }
-    
-    /**
-     * Verifica si dos vehículos están en la misma línea/calle.
-     */
-    private boolean estanEnMismaLinea(double x1, double y1, double x2, double y2, 
-                                     double dirX, double dirY) {
-        // calcular la distancia perpendicular del segundo punto a la línea del primero
-        double deltaX = x2 - x1;
-        double deltaY = y2 - y1;
-        
-        // normalizar dirección
-        double magnitud = Math.sqrt(dirX * dirX + dirY * dirY);
-        if (magnitud == 0) return false;
-        
-        double dirNormX = dirX / magnitud;
-        double dirNormY = dirY / magnitud;
-        
-        // proyección del vector delta sobre la dirección
-        double proyeccion = deltaX * dirNormX + deltaY * dirNormY;
-        
-        // componente perpendicular
-        double perpX = deltaX - proyeccion * dirNormX;
-        double perpY = deltaY - proyeccion * dirNormY;
-        
-        double distanciaPerpendicular = Math.sqrt(perpX * perpX + perpY * perpY);
-        
-        return distanciaPerpendicular <= TOLERANCIA_ALINEACION;
     }
     
     /**

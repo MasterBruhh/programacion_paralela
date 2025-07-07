@@ -279,6 +279,16 @@ public class CruceManager {
     }
     
     /**
+     * Verifica si ha habido cambios recientes en una cola específica.
+     * @param direccion dirección de la cola a verificar
+     * @return true si ha habido cambios recientes
+     */
+    public boolean hayCambioRecienteEnCola(DireccionCruce direccion) {
+        CalleQueue cola = colasPorCalle.get(direccion);
+        return cola != null && cola.hayCambioRecienteEnCola();
+    }
+    
+    /**
      * Record para representar el estado completo del cruce.
      */
     public record EstadoCruce(

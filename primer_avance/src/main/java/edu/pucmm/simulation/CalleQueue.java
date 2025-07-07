@@ -25,6 +25,7 @@ public class CalleQueue {
     private final CruceManager.DireccionCruce direccion;
     
     private static final double DISTANCIA_ENTRE_VEHICULOS = 20.0; // distancia de seguridad en cola
+    private long ultimoCambioEnCola = 0; // timestamp del último cambio en la cola
 
     public CalleQueue(String calleId, CruceManager.DireccionCruce direccion) {
         this.calleId = calleId;
@@ -119,6 +120,14 @@ public class CalleQueue {
     }
     
     /**
+     * Verifica si la cola ha cambiado recientemente (en los últimos 500ms)
+     * para permitir reposicionamiento de vehículos.
+     */
+    public boolean hayCambioRecienteEnCola() {
+        return (System.currentTimeMillis() - ultimoCambioEnCola) < 500;
+    }
+    
+    /**
      * Remueve un vehículo de la cola (cuando cruza la intersección).
      * 
      * @param vehiculoId ID del vehículo
@@ -128,6 +137,7 @@ public class CalleQueue {
         if (removed) {
             posicionEnCola.remove(vehiculoId);
             recalcularPosiciones();
+            ultimoCambioEnCola = System.currentTimeMillis(); // Marcar cambio en la cola
             logger.info("vehículo " + vehiculoId + " removido de cola de " + calleId);
         }
     }
@@ -153,7 +163,13 @@ public class CalleQueue {
             return null;
         }
         
-        // calcular posición basada en la dirección y la posición en la cola
+        // Si es el primer vehículo, usar posición del stop sign
+        if (posicion == 0) {
+            return new double[]{posXStop, posYStop};
+        }
+        
+        // Para vehículos en segunda posición o más, calcular posición basada en offset fijo
+        // Esto evita el jitter causado por intentar seguir dinámicamente al vehículo de adelante
         double offsetDistancia = posicion * DISTANCIA_ENTRE_VEHICULOS;
         double posX = posXStop;
         double posY = posYStop;

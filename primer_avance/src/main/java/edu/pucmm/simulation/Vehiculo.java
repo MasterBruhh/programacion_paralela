@@ -125,7 +125,23 @@ public abstract class Vehiculo implements Runnable {
         }
 
         // 4. interactuar con entorno
-        if (puedeRealizarMovimiento(nextMovement)) {
+        boolean puedeMover = puedeRealizarMovimiento(nextMovement);
+
+        // Si el vehículo está en cola pero no puede moverse (otro vehículo por delante),
+        // estabilizar su posición para evitar recalculos constantes que producen jitter.
+        if (!puedeMover && faseMovimiento == FaseMovimiento.EN_COLA) {
+            posicionColaEstabilizada = true;
+            nextMovement = new MovimientoInfo(posX, posY, 0);
+            puedeMover = true; // aplicar asignación exacta y publicar estado
+        }
+        
+        // También estabilizar si ya está muy cerca de su posición de cola asignada
+        if (faseMovimiento == FaseMovimiento.EN_COLA && nextMovement.distancia() > 0 && nextMovement.distancia() < 2.0) {
+            posicionColaEstabilizada = true;
+            nextMovement = new MovimientoInfo(nextMovement.nextX(), nextMovement.nextY(), 0);
+        }
+
+        if (puedeMover) {
             // 5. aplicar movimiento
             aplicarMovimiento(nextMovement);
 
@@ -333,9 +349,20 @@ public abstract class Vehiculo implements Runnable {
      * Calcula el movimiento hacia la posición asignada en la cola.
      */
     private MovimientoInfo calcularMovimientoHaciaPosicionCola() {
-        // Si ya está en posición estable, no recalcular - retornar posición actual sin movimiento
+        // Si ya está en posición estable, verificar si la cola cambió recientemente
         if (posicionColaEstabilizada) {
-            return new MovimientoInfo(posX, posY, 0);
+            if (simulationModel instanceof CruceSimulationModel cruceModel && direccionCola != null) {
+                // Si la cola cambió recientemente, permitir un reposicionamiento
+                if (cruceModel.getCruceManager().hayCambioRecienteEnCola(direccionCola)) {
+                    posicionColaEstabilizada = false; // Permitir un reposicionamiento
+                    logger.fine("Permitiendo reposicionamiento de " + id + " por cambio reciente en cola");
+                }
+            }
+            
+            // Si sigue estabilizado, mantener posición actual
+            if (posicionColaEstabilizada) {
+                return new MovimientoInfo(posX, posY, 0);
+            }
         }
         
         if (!(simulationModel instanceof CruceSimulationModel cruceModel) || direccionCola == null) {
@@ -434,11 +461,14 @@ public abstract class Vehiculo implements Runnable {
                     enCola = true;
                     direccionCola = direccionCercana;
                     faseMovimiento = FaseMovimiento.EN_COLA;
+                    posicionColaEstabilizada = false; // Permitir posicionamiento inicial en la cola
                     logger.info("vehículo " + id + " (creado en t=" + timestampCreacion + ") se unió a la cola de " + direccionCercana);
                 }
                 
                 // si está en cola y es el primero, puede solicitar cruce
                 if (enCola && !cruceOtorgado && cruceModel.getCruceManager().puedesolicitarCruce(id, direccionCola)) {
+                    // al convertirnos en el primero de la cola, permitir que el vehículo avance
+                    posicionColaEstabilizada = false;
                     // verificar si llegó a la línea de parada
                     if (estaEnLineaDeParada()) {
                         

@@ -33,8 +33,8 @@ public class CruceManager {
     public enum DireccionCruce {
         NORTE(400, 250),   // stop line just above the intersection
         SUR(400, 340),     // stop line just below the intersection
-        ESTE(325, 295),    // stop line just right of the intersection
-        OESTE(475, 295);  // izquierda del cruce
+        ESTE(475, 295),    // stop line at the east side (vehículos desde la derecha)
+        OESTE(325, 295);   // stop line at the west side (vehículos desde la izquierda)
 
 
         public final double posX, posY;
@@ -267,6 +267,10 @@ public class CruceManager {
         return id;
     }
     
+    /**
+     * Obtiene el coordinador global del cruce.
+     * @return coordinador global
+     */
     public CruceCoordinador getCoordinadorGlobal() {
         return coordinadorGlobal;
     }

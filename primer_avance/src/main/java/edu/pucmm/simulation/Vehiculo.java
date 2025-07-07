@@ -528,8 +528,8 @@ public abstract class Vehiculo implements Runnable {
     }
     
     /**
-     * Verifica si el vehículo puede proceder respetando todas las líneas de tráfico.
-     * Esta función verifica colisiones en todas las direcciones y condiciones de seguridad.
+     * Verifica si el vehículo puede proceder después del pare obligatorio.
+     * Respeta todas las condiciones de seguridad y prioridad.
      */
     private boolean puedeProcedeRestpestandoTodasLasLineas() {
         if (!(simulationModel instanceof CruceSimulationModel cruceModel)) {
@@ -552,10 +552,17 @@ public abstract class Vehiculo implements Runnable {
             return false;
         }
         
-        // 3. Para vehículos normales, verificar prioridad (emergencias pueden proceder)
+        // 3. Para vehículos normales, verificar si hay emergencias en el sistema
         if (tipo == TipoVehiculo.normal) {
+            // Verificar si hay emergencia en el cruce
             if (hayVehiculoEmergenciaEnElCruce()) {
                 logger.fine("vehículo " + id + " esperando - vehículo de emergencia en el cruce");
+                return false;
+            }
+            
+            // NUEVO: Verificar si hay emergencia acercándose desde cualquier dirección
+            if (hayVehiculoEmergenciaAcercandose()) {
+                logger.warning("🚨 vehículo " + id + " esperando - vehículo de emergencia acercándose");
                 return false;
             }
         }
@@ -623,6 +630,63 @@ public abstract class Vehiculo implements Runnable {
     }
     
     /**
+     * Verifica si hay un vehículo de emergencia acercándose desde cualquier dirección.
+     * Esto incluye vehículos de emergencia en cualquier cola o aproximándose al cruce.
+     */
+    private boolean hayVehiculoEmergenciaAcercandose() {
+        if (!(simulationModel instanceof CruceSimulationModel cruceModel)) {
+            return false;
+        }
+        
+        // Definir zona amplia de detección alrededor del cruce
+        double zonaDeteccionMinX = 200;  // más amplio que el cruce
+        double zonaDeteccionMaxX = 600;
+        double zonaDeteccionMinY = 100;
+        double zonaDeteccionMaxY = 500;
+        
+        // Buscar vehículos de emergencia en la zona amplia o en las colas
+        boolean hayEmergencia = cruceModel.getSimulationModel().getVehiculos().values().stream()
+            .anyMatch(vehiculo -> {
+                if (vehiculo.tipo() != TipoVehiculo.emergencia) {
+                    return false;
+                }
+                
+                // Si la emergencia es este mismo vehículo, ignorar
+                if (vehiculo.id().equals(id)) {
+                    return false;
+                }
+                
+                // Verificar si está en la zona de detección
+                boolean enZonaDeteccion = vehiculo.posX() >= zonaDeteccionMinX && 
+                                         vehiculo.posX() <= zonaDeteccionMaxX &&
+                                         vehiculo.posY() >= zonaDeteccionMinY && 
+                                         vehiculo.posY() <= zonaDeteccionMaxY;
+                
+                if (enZonaDeteccion) {
+                    logger.info("🚨 Detectado vehículo de emergencia " + vehiculo.id() + 
+                               " en zona de aproximación: (" + 
+                               String.format("%.1f", vehiculo.posX()) + ", " + 
+                               String.format("%.1f", vehiculo.posY()) + ")");
+                    return true;
+                }
+                
+                return false;
+            });
+        
+        // También verificar si hay emergencias registradas en el coordinador global
+        if (!hayEmergencia && cruceModel.getCruceManager() != null) {
+            var siguiente = cruceModel.getCruceManager().getCoordinadorGlobal().getSiguienteEnOrden();
+            if (siguiente != null && siguiente.tipo() == TipoVehiculo.emergencia) {
+                logger.info("🚨 Vehículo de emergencia " + siguiente.vehiculoId() + 
+                           " registrado como siguiente en orden global");
+                hayEmergencia = true;
+            }
+        }
+        
+        return hayEmergencia;
+    }
+
+    /**
      * Verifica si el vehículo puede realizar el movimiento propuesto.
      */
     protected boolean puedeRealizarMovimiento(MovimientoInfo movimiento) {
@@ -659,14 +723,14 @@ public abstract class Vehiculo implements Runnable {
      */
     private boolean estaEnLineaDeParada() {
         if (direccionCola == null) return false;
-        int centroX = 400;
-        int centroY = 300;
-        int lado = 75;
+        double tolerancia = 10.0; // Aumentar tolerancia para detección más temprana
+        
+        // Usar las coordenadas exactas de los stop signs según el punto de salida
         return switch (puntoSalida) {
-            case ABAJO -> posY - lado <= centroY;
-            case ARRIBA -> posY + lado >= centroY;
-            case IZQUIERDA -> posX + lado >= centroX;
-            case DERECHA -> posX - lado <= centroX;
+            case ARRIBA -> posY >= CruceManager.DireccionCruce.NORTE.posY - tolerancia;
+            case ABAJO -> posY <= CruceManager.DireccionCruce.SUR.posY + tolerancia;
+            case IZQUIERDA -> posX >= CruceManager.DireccionCruce.OESTE.posX - tolerancia;
+            case DERECHA -> posX <= CruceManager.DireccionCruce.ESTE.posX + tolerancia;
         };
     }
 

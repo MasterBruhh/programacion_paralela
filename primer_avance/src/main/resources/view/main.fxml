@@ -124,8 +124,6 @@
                 <Insets top="10" right="10" bottom="10" left="10"/>
             </padding>
             <Button text="Iniciar" onAction="#handlePlay"/>
-            <Button text="Pausar" onAction="#handlePause"/>
-            <Button text="Resetear" onAction="#handleReset"/>
         </HBox>
     </bottom>
 

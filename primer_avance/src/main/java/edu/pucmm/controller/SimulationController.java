@@ -20,6 +20,7 @@ import javafx.scene.shape.Rectangle;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class SimulationController {
 
@@ -32,6 +33,7 @@ public class SimulationController {
     private Direccion direccionSeleccionada = Direccion.recto;
     private CruceSimulationModel modelo;
     private static final List<Vehiculo> vehiculosActivos = new ArrayList<>();
+    private boolean simulacionEnMarcha = false;
 
     public static List<Vehiculo> getVehiculosActivos() {
         return vehiculosActivos;
@@ -128,7 +130,10 @@ public class SimulationController {
                 coords[1]
         );
         vehiculosActivos.add(vehiculoE);
-
+        if (simulacionEnMarcha) {
+            new Thread(vehiculoE).start();
+            vehiculoE.setRunning(true);
+        }
         // Muestra una alerta de confirmación
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle("Vehículo Creado");
@@ -144,13 +149,16 @@ public class SimulationController {
     // --- Métodos de control de la simulación y otros ---
 
     @FXML public void handlePlay() {
+        simulacionEnMarcha = true;
         for (Vehiculo v : vehiculosActivos) {
-            new Thread(v).start();
+            if (!v.isRunning()) { // Debes agregar este método en Vehiculo
+                new Thread(v).start();
+                v.setRunning(true);
+            }
         }
     }
 
-    @FXML private void handlePause() { System.out.println("Simulación pausada..."); }
-    @FXML private void handleReset() { System.out.println("Simulación reseteada..."); }
+
     @FXML private void handleExit() { Platform.exit(); }
 
     private void dibujarLineasDeCarretera() {

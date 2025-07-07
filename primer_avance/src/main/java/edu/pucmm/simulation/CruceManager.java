@@ -31,10 +31,10 @@ public class CruceManager {
      * Direcciones de entrada al cruce.
      */
     public enum DireccionCruce {
-        NORTE(400, 230),   // arriba del cruce
-        SUR(400, 360),     // abajo del cruce
-        ESTE(460, 295),    // derecha del cruce
-        OESTE(340, 295);   // izquierda del cruce
+        NORTE(400, 250),   // stop line just above the intersection
+        SUR(400, 340),     // stop line just below the intersection
+        ESTE(325, 295),    // stop line just right of the intersection
+        OESTE(475, 295);  // izquierda del cruce
 
 
         public final double posX, posY;

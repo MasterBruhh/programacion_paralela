@@ -67,6 +67,10 @@ public abstract class Vehiculo implements Runnable {
         this.puntoSalida = puntoSalida;
     }
 
+    public boolean setRunning(boolean running) {
+        return running;
+    }
+
     @Override
     public final void run() {
         running.set(true);
@@ -655,13 +659,15 @@ public abstract class Vehiculo implements Runnable {
      */
     private boolean estaEnLineaDeParada() {
         if (direccionCola == null) return false;
-        
-        double distancia = Math.sqrt(
-            Math.pow(posX - direccionCola.posX, 2) + 
-            Math.pow(posY - direccionCola.posY, 2)
-        );
-        
-        return distancia < 5.0; // tolerancia de 5 unidades
+        int centroX = 400;
+        int centroY = 300;
+        int lado = 75;
+        return switch (puntoSalida) {
+            case ABAJO -> posY - lado <= centroY;
+            case ARRIBA -> posY + lado >= centroY;
+            case IZQUIERDA -> posX + lado >= centroX;
+            case DERECHA -> posX - lado <= centroX;
+        };
     }
 
     /**

@@ -48,4 +48,15 @@ public interface ISimulationModel {
      * @return true si está cerca de una intersección, false en caso contrario
      */
     boolean estaCercaDeInterseccion(String vehiculoId, double posX, double posY);
+
+        /**
+     * Elimina por completo un vehículo del modelo de simulación.
+     * Se utiliza cuando el vehículo ha terminado de cruzar y debe desaparecer
+     * de la representación interna.
+     *
+     * @param vehiculoId id del vehículo a eliminar
+     */
+    default void eliminarVehiculo(String vehiculoId) {
+        // Implementaciones previas pueden ignorar esta función
+    }
 }

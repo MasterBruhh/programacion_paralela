@@ -3,6 +3,7 @@ package edu.pucmm.simulation;
 import edu.pucmm.model.PuntoSalida;
 import edu.pucmm.model.TipoVehiculo;
 import edu.pucmm.model.VehiculoState;
+import edu.pucmm.controller.SimulationController;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Logger;
@@ -438,9 +439,14 @@ public abstract class Vehiculo implements Runnable {
      */
     private void manejarInterseccionesYCola() throws InterruptedException {
         if (simulationModel instanceof CruceSimulationModel cruceModel) {
-            // determinar intersección más cercana
-            CruceManager.DireccionCruce direccionCercana = 
-                cruceModel.getCruceManager().determinarInterseccionMasCercana(posX, posY);
+            // determinar intersección basada en el punto de salida del vehículo
+            // para evitar que tome una dirección incorrecta al estar lejos del cruce
+            CruceManager.DireccionCruce direccionCercana = switch (puntoSalida) {
+                case ARRIBA -> CruceManager.DireccionCruce.NORTE;
+                case ABAJO -> CruceManager.DireccionCruce.SUR;
+                case IZQUIERDA -> CruceManager.DireccionCruce.OESTE;
+                case DERECHA -> CruceManager.DireccionCruce.ESTE;
+            };
             
             // verificar si está cerca de una intersección
             if (simulationModel.estaCercaDeInterseccion(id, posX, posY)) {
@@ -562,6 +568,17 @@ public abstract class Vehiculo implements Runnable {
                     cruceOtorgado = false;
                     faseMovimiento = FaseMovimiento.AVANZANDO; // volver a movimiento normal
                     logger.info("🏁 vehículo " + id + " terminó de cruzar, liberando intersección");
+
+
+                    // Eliminar el vehículo del modelo y detener su hilo
+                    if (simulationModel instanceof CruceSimulationModel cruceSim) {
+                        cruceSim.eliminarVehiculo(id);
+                    } else {
+                        simulationModel.eliminarVehiculo(id);
+                    }
+                    SimulationController.getVehiculosActivos().remove(this);
+                    running.set(false);
+                    return;
                 }
             }
         }

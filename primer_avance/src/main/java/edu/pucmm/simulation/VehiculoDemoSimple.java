@@ -177,6 +177,11 @@ public class VehiculoDemoSimple {
             // en demo simple no hay intersecciones
             return false;
         }
+
+        @Override
+        public void eliminarVehiculo(String vehiculoId) {
+            model.removeState(vehiculoId);
+        }
     }
 }
  

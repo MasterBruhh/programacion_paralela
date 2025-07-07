@@ -59,6 +59,12 @@ public class CruceSimulationModel implements ISimulationModel {
     }
 
     @Override
+    public void eliminarVehiculo(String vehiculoId) {
+        simulationModel.removeState(vehiculoId);
+        puntoSalidaPorVehiculo.remove(vehiculoId);
+    }
+
+    @Override
     public void solicitarCruceInterseccion(String vehiculoId, TipoVehiculo tipo,
                                            double vehiculoPosX, double vehiculoPosY) throws InterruptedException {
         Long ultimaSolicitud = solicitudesCrucePendientes.get(vehiculoId);
@@ -145,6 +151,12 @@ public class CruceSimulationModel implements ISimulationModel {
 
     public ColisionDetector getColisionDetector() {
         return colisionDetector;
+    }
+
+    @Override
+    public void eliminarVehiculo(String vehiculoId) {
+        simulationModel.removeState(vehiculoId);
+        puntoSalidaPorVehiculo.remove(vehiculoId);
     }
 
     /**

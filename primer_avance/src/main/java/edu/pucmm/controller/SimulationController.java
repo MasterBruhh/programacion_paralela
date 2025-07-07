@@ -17,10 +17,16 @@ import javafx.scene.layout.Pane;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
 import javafx.scene.shape.Rectangle;
+import javafx.animation.TranslateTransition;
+import javafx.animation.FadeTransition;
+import javafx.animation.ParallelTransition;
+import javafx.util.Duration;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.HashSet;
 
 public class SimulationController {
 
@@ -34,6 +40,9 @@ public class SimulationController {
     private CruceSimulationModel modelo;
     private static final List<Vehiculo> vehiculosActivos = new ArrayList<>();
     private boolean simulacionEnMarcha = false;
+    private final java.util.Map<String, Circle> nodosVehiculo = new HashMap<>();
+    private final java.util.Map<String, VehiculoState> ultimoEstado = new HashMap<>();
+    private final java.util.Set<String> vehiculosAnimandoSalida = new java.util.HashSet<>();
 
     public static List<Vehiculo> getVehiculosActivos() {
         return vehiculosActivos;
@@ -44,17 +53,9 @@ public class SimulationController {
         dibujarLineasDeCarretera();
         System.out.println("Simulación inicializada. Configuración por defecto: Salida=ARRIBA, Tipo=NORMAL, Dirección=RECTO");
         modelo = new CruceSimulationModel(new SimulationModel(),"cruce-1");
-        modelo.getSimulationModel().addObserver(snapshot -> {
-            Platform.runLater(() -> {
-                lienzo.getChildren().removeIf(n -> n instanceof Circle && !"stop".equals(n.getId())); // limpiar solo vehículos
-                for (VehiculoState v : snapshot.values()) {
-                    Circle vehiculo = new Circle(10, v.tipo() == TipoVehiculo.emergencia ? Color.WHITE : Color.BLUE);
-                    vehiculo.setCenterX(v.posX());
-                    vehiculo.setCenterY(v.posY());
-                    lienzo.getChildren().add(vehiculo);
-                }
-            });
-        });
+            modelo.getSimulationModel().addObserver(snapshot ->
+            Platform.runLater(() -> actualizarVehiculos(snapshot))
+        );
     }
 
     // --- Métodos para el Menú de Configuración ---
@@ -101,6 +102,130 @@ public class SimulationController {
     }
 
     /**
+     * Actualiza la representación visual de los vehículos.
+     * Si un vehículo desaparece del modelo, se anima su salida y se elimina su nodo.
+     */
+    private void actualizarVehiculos(java.util.Map<String, VehiculoState> snapshot) {
+        // eliminar vehículos que ya no están en el snapshot
+        for (String id : new java.util.ArrayList<>(nodosVehiculo.keySet())) {
+            if (!snapshot.containsKey(id) && !vehiculosAnimandoSalida.contains(id)) {
+                Circle nodo = nodosVehiculo.remove(id);
+                VehiculoState estado = ultimoEstado.remove(id);
+                if (nodo != null && estado != null) {
+                    vehiculosAnimandoSalida.add(id); // Marcar como en animación de salida
+                    PuntoSalida salida = modelo.getPuntoSalidaVehiculo(id);
+                    animarYEliminarNodo(nodo, estado, salida, id);
+                } else if (nodo != null) {
+                    lienzo.getChildren().remove(nodo);
+                }
+            }
+        }
+
+        // actualizar o crear nodos para los vehículos actuales
+        for (VehiculoState v : snapshot.values()) {
+            // NO crear un nuevo círculo si el vehículo está en proceso de animación de salida
+            if (vehiculosAnimandoSalida.contains(v.id())) {
+                continue;
+            }
+            
+            // SAFETY: Don't create circles for vehicles that are not in active list and running
+            boolean vehiculoActivo = vehiculosActivos.stream()
+                .anyMatch(vehiculo -> vehiculo.getId().equals(v.id()) && vehiculo.isRunning());
+            
+            if (!vehiculoActivo) {
+                System.out.println("Ignorando estado de vehículo inactivo: " + v.id());
+                continue;
+            }
+            
+            Circle nodo = nodosVehiculo.get(v.id());
+            if (nodo == null) {
+                nodo = new Circle(10, v.tipo() == TipoVehiculo.emergencia ? Color.WHITE : Color.BLUE);
+                nodosVehiculo.put(v.id(), nodo);
+                lienzo.getChildren().add(nodo);
+            }
+            nodo.setCenterX(v.posX());
+            nodo.setCenterY(v.posY());
+            ultimoEstado.put(v.id(), v);
+        }
+    }
+
+    /**
+     * Mueve el nodo fuera del lienzo con un desvanecido y lo elimina al finalizar.
+     */
+    private void animarYEliminarNodo(Circle nodo, VehiculoState estado, PuntoSalida salida, String id) {
+        double startX = nodo.getCenterX();
+        double startY = nodo.getCenterY();
+        
+        // Obtener dimensiones del lienzo con fallback
+        double ancho = lienzo.getWidth() > 0 ? lienzo.getWidth() : lienzo.getPrefWidth();
+        if (ancho <= 0) ancho = 800;
+        double alto = lienzo.getHeight() > 0 ? lienzo.getHeight() : lienzo.getPrefHeight();
+        if (alto <= 0) alto = 600;
+
+        double destinoX = startX;
+        double destinoY = startY;
+
+        // Calcular destino basado en PuntoSalida o posición actual
+        if (salida != null) {
+            switch (salida) {
+                case ARRIBA -> destinoY = alto + 50;  // Salir por abajo
+                case ABAJO -> destinoY = -50;         // Salir por arriba
+                case IZQUIERDA -> destinoX = ancho + 50;  // Salir por derecha
+                case DERECHA -> destinoX = -50;       // Salir por izquierda
+            }
+        } else {
+            // Fallback: calcular dirección hacia el borde más cercano
+            double distLeft = startX;
+            double distRight = ancho - startX;
+            double distTop = startY;
+            double distBottom = alto - startY;
+            
+            double minDist = Math.min(Math.min(distLeft, distRight), Math.min(distTop, distBottom));
+            
+            if (minDist == distLeft) {
+                destinoX = -50;
+            } else if (minDist == distRight) {
+                destinoX = ancho + 50;
+            } else if (minDist == distTop) {
+                destinoY = -50;
+            } else {
+                destinoY = alto + 50;
+            }
+        }
+
+        // Crear animación de movimiento usando setTo en lugar de setBy
+        TranslateTransition tt = new TranslateTransition(Duration.seconds(1.5), nodo);
+        tt.setToX(destinoX - startX);  // TranslateTransition usa offsets relativos
+        tt.setToY(destinoY - startY);
+
+        // Crear animación de desvanecimiento
+        FadeTransition ft = new FadeTransition(Duration.seconds(1.5), nodo);
+        ft.setFromValue(1.0);
+        ft.setToValue(0.0);
+
+        // Combinar ambas animaciones
+        ParallelTransition pt = new ParallelTransition(tt, ft);
+        pt.setOnFinished(e -> {
+            lienzo.getChildren().remove(nodo);
+            System.out.println("Vehículo " + estado.id() + " eliminado del lienzo tras animación");
+            vehiculosAnimandoSalida.remove(id);
+            
+            // CRITICAL: Remove vehicle from active list to prevent reappearance
+            vehiculosActivos.removeIf(v -> v.getId().equals(id));
+            
+            // Also ensure it's completely removed from the model
+            modelo.eliminarVehiculo(id);
+            
+            // Remove from all local tracking maps
+            ultimoEstado.remove(id);
+        });
+        
+        System.out.println("Iniciando animación de salida para " + estado.id() + 
+                          " desde (" + startX + "," + startY + ") hacia (" + destinoX + "," + destinoY + ")");
+        pt.play();
+    }
+
+    /**
      * Esta es la función principal que se llama desde el menú "Acción > Crear Vehículo".
      * Utiliza los valores guardados en las variables de estado para crear un vehículo.
      */
@@ -113,13 +238,6 @@ public class SimulationController {
         // Consigue coordenadas iniciales desde la fábrica
         double[] coords = VehiculoFactory.getStartingCoordinates(salidaSeleccionada);
 
-        // Crea y muestra el círculo en la posición real de simulación
-        Circle vehiculo = new Circle(10);
-        vehiculo.setFill(tipoVehiculoSeleccionado == TipoVehiculo.emergencia ? Color.WHITE : Color.BLUE);
-        vehiculo.setCenterX(coords[0]);
-        vehiculo.setCenterY(coords[1]);
-        lienzo.getChildren().add(vehiculo);
-
         // Crea el objeto de simulación con las mismas coordenadas
         Vehiculo vehiculoE = VehiculoFactory.createConfiguredVehicle(
                 tipoVehiculoSeleccionado,
@@ -129,6 +247,13 @@ public class SimulationController {
                 coords[0],
                 coords[1]
         );
+        
+        // Register the PuntoSalida with the model for proper exit animation
+        modelo.registrarPuntoSalidaVehiculo(vehiculoE.getId(), salidaSeleccionada);
+
+        // Ya no creamos el círculo manualmente aquí - el observer lo hará automáticamente
+        // cuando el vehículo publique su primer estado
+        
         vehiculosActivos.add(vehiculoE);
         if (simulacionEnMarcha) {
             new Thread(vehiculoE).start();

@@ -38,17 +38,24 @@ public class CruceSimulationModel implements ISimulationModel {
 
     @Override
     public void publishState(VehiculoState estado) {
-        // Try to get PuntoSalida from the active vehicles (if available)
+        // Only register PuntoSalida if we don't already have it and the vehicle is still active
         if (!puntoSalidaPorVehiculo.containsKey(estado.id())) {
-            // Try to find the Vehiculo instance and get its PuntoSalida
-            // This is a workaround: if you have a global list of active vehicles, use it
+            // Only search for PuntoSalida if this vehicle ID is not marked for deletion
+            boolean vehiculoEncontrado = false;
             for (Vehiculo v : SimulationController.getVehiculosActivos()) {
-                if (v.getId().equals(estado.id())) {
+                if (v.getId().equals(estado.id()) && v.isRunning()) {
                     puntoSalidaPorVehiculo.put(estado.id(), v.getPuntoSalida());
+                    vehiculoEncontrado = true;
                     break;
                 }
             }
+            
+            // If vehicle not found in active list, don't publish its state
+            if (!vehiculoEncontrado) {
+                return;
+            }
         }
+        
         simulationModel.updateState(estado);
     }
 
@@ -155,6 +162,26 @@ public class CruceSimulationModel implements ISimulationModel {
 
     public ColisionDetector getColisionDetector() {
         return colisionDetector;
+    }
+
+    /**
+     * Obtiene el punto de salida registrado para un vehículo.
+     *
+     * @param vehiculoId id del vehículo
+     * @return PuntoSalida asociado o null si no se conoce
+     */
+    public PuntoSalida getPuntoSalidaVehiculo(String vehiculoId) {
+        return puntoSalidaPorVehiculo.get(vehiculoId);
+    }
+
+    /**
+     * Registra el punto de salida para un vehículo.
+     *
+     * @param vehiculoId id del vehículo
+     * @param puntoSalida punto de salida del vehículo
+     */
+    public void registrarPuntoSalidaVehiculo(String vehiculoId, PuntoSalida puntoSalida) {
+        puntoSalidaPorVehiculo.put(vehiculoId, puntoSalida);
     }
 
     @Override

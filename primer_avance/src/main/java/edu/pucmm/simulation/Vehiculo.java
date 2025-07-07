@@ -35,6 +35,7 @@ public abstract class Vehiculo implements Runnable {
     private CruceManager.DireccionCruce direccionCola = null;
     private boolean cruceOtorgado = false; // nuevo flag para trackear si tiene permiso de cruce
     private long tiempoCruceOtorgado = 0; // timestamp cuando se otorgó el permiso
+    private boolean posicionColaEstabilizada = false; // flag para indicar si ya está en posición de cola estable
     
     // Variables para el PARE OBLIGATORIO
     private boolean enPareObligatorio = false;
@@ -193,49 +194,37 @@ public abstract class Vehiculo implements Runnable {
             // Si es recto, mantener CRUZANDO que funcionará como AVANZANDO
         }
 
+        // Calcular movimiento basado en dirección de salida
         switch (puntoSalida) {
             case ABAJO -> {
                 if (direccion == Direccion.recto) {
                     nextY -= distancia;
                 } else if (direccion == Direccion.derecha) {
-                    if (faseMovimiento == FaseMovimiento.AVANZANDO || faseMovimiento == FaseMovimiento.CRUZANDO) {
-                        if (posY > 320) {
-                            nextY -= distancia;
-                        } else {
-                            faseMovimiento = FaseMovimiento.GIRA_DERECHA;
-                        }
-                    }
+                    // Fase de giro solo cuando está en CRUZANDO o GIRA_DERECHA, de lo contrario sigue recto
                     if (faseMovimiento == FaseMovimiento.GIRA_DERECHA) {
                         nextX += distancia;
+                    } else {
+                        nextY -= distancia; // Sigue recto hasta llegar al stop
                     }
                 } else if (direccion == Direccion.izquierda) {
-                    if (faseMovimiento == FaseMovimiento.AVANZANDO || faseMovimiento == FaseMovimiento.CRUZANDO) {
-                        if (posY > 270) {
-                            nextY -= distancia;
-                        } else {
-                            faseMovimiento = FaseMovimiento.GIRA_IZQUIERDA;
-                        }
-                    }
+                    // Fase de giro solo cuando está en CRUZANDO o GIRA_IZQUIERDA
                     if (faseMovimiento == FaseMovimiento.GIRA_IZQUIERDA) {
                         nextX -= distancia;
+                    } else {
+                        nextY -= distancia; // Sigue recto hasta llegar al stop
                     }
                 } else if (direccion == Direccion.vuelta_u) {
-                    if (faseMovimiento == FaseMovimiento.AVANZANDO || faseMovimiento == FaseMovimiento.CRUZANDO) {
-                        if (posY > 320) {
-                            nextY -= distancia;
-                        } else {
-                            faseMovimiento = FaseMovimiento.GIRA_IZQUIERDA;
-                        }
-                    }
+                    // Fase de giro solo cuando está en CRUZANDO o fases de giro
                     if (faseMovimiento == FaseMovimiento.GIRA_IZQUIERDA) {
                         if (posX > 375) {
                             nextX -= distancia;
                         } else {
                             faseMovimiento = FaseMovimiento.GIRA_IZQUIERDA_2;
                         }
-                    }
-                    if (faseMovimiento == FaseMovimiento.GIRA_IZQUIERDA_2) {
+                    } else if (faseMovimiento == FaseMovimiento.GIRA_IZQUIERDA_2) {
                         nextY += distancia;
+                    } else {
+                        nextY -= distancia; // Sigue recto hasta llegar al stop
                     }
                 }
             }
@@ -243,44 +232,31 @@ public abstract class Vehiculo implements Runnable {
                 if (direccion == Direccion.recto) {
                     nextY += distancia;
                 } else if (direccion == Direccion.derecha) {
-                    if (faseMovimiento == FaseMovimiento.AVANZANDO || faseMovimiento == FaseMovimiento.CRUZANDO) {
-                        if (posY < 270) {
-                            nextY += distancia;
-                        } else {
-                            faseMovimiento = FaseMovimiento.GIRA_DERECHA;
-                        }
-                    }
+                    // Fase de giro solo cuando está en CRUZANDO o GIRA_DERECHA
                     if (faseMovimiento == FaseMovimiento.GIRA_DERECHA) {
                         nextX -= distancia;
+                    } else {
+                        nextY += distancia; // Sigue recto hasta llegar al stop
                     }
                 } else if (direccion == Direccion.izquierda) {
-                    if (faseMovimiento == FaseMovimiento.AVANZANDO || faseMovimiento == FaseMovimiento.CRUZANDO) {
-                        if (posY < 320) {
-                            nextY += distancia;
-                        } else {
-                            faseMovimiento = FaseMovimiento.GIRA_IZQUIERDA;
-                        }
-                    }
+                    // Fase de giro solo cuando está en CRUZANDO o GIRA_IZQUIERDA
                     if (faseMovimiento == FaseMovimiento.GIRA_IZQUIERDA) {
                         nextX += distancia;
+                    } else {
+                        nextY += distancia; // Sigue recto hasta llegar al stop
                     }
                 } else if (direccion == Direccion.vuelta_u) {
-                    if (faseMovimiento == FaseMovimiento.AVANZANDO || faseMovimiento == FaseMovimiento.CRUZANDO) {
-                        if (posY < 270) {
-                            nextY += distancia;
-                        } else {
-                            faseMovimiento = FaseMovimiento.GIRA_IZQUIERDA;
-                        }
-                    }
+                    // Fase de giro solo cuando está en CRUZANDO o fases de giro
                     if (faseMovimiento == FaseMovimiento.GIRA_IZQUIERDA) {
                         if (posX < 420) {
                             nextX += distancia;
                         } else {
                             faseMovimiento = FaseMovimiento.GIRA_IZQUIERDA_2;
                         }
-                    }
-                    if (faseMovimiento == FaseMovimiento.GIRA_IZQUIERDA_2) {
+                    } else if (faseMovimiento == FaseMovimiento.GIRA_IZQUIERDA_2) {
                         nextY -= distancia;
+                    } else {
+                        nextY += distancia; // Sigue recto hasta llegar al stop
                     }
                 }
             }
@@ -288,44 +264,31 @@ public abstract class Vehiculo implements Runnable {
                 if (direccion == Direccion.recto) {
                     nextX += distancia;
                 } else if (direccion == Direccion.derecha) {
-                    if (faseMovimiento == FaseMovimiento.AVANZANDO || faseMovimiento == FaseMovimiento.CRUZANDO) {
-                        if (posX < 375) {
-                            nextX += distancia;
-                        } else {
-                            faseMovimiento = FaseMovimiento.GIRA_DERECHA;
-                        }
-                    }
+                    // Fase de giro solo cuando está en CRUZANDO o GIRA_DERECHA
                     if (faseMovimiento == FaseMovimiento.GIRA_DERECHA) {
                         nextY += distancia;
+                    } else {
+                        nextX += distancia; // Sigue recto hasta llegar al stop
                     }
                 } else if (direccion == Direccion.izquierda) {
-                    if (faseMovimiento == FaseMovimiento.AVANZANDO || faseMovimiento == FaseMovimiento.CRUZANDO) {
-                        if (posX < 420) {
-                            nextX += distancia;
-                        } else {
-                            faseMovimiento = FaseMovimiento.GIRA_IZQUIERDA;
-                        }
-                    }
+                    // Fase de giro solo cuando está en CRUZANDO o GIRA_IZQUIERDA
                     if (faseMovimiento == FaseMovimiento.GIRA_IZQUIERDA) {
                         nextY -= distancia;
+                    } else {
+                        nextX += distancia; // Sigue recto hasta llegar al stop
                     }
                 } else if (direccion == Direccion.vuelta_u) {
-                    if (faseMovimiento == FaseMovimiento.AVANZANDO || faseMovimiento == FaseMovimiento.CRUZANDO) {
-                        if (posX < 375) {
-                            nextX += distancia;
-                        } else {
-                            faseMovimiento = FaseMovimiento.GIRA_IZQUIERDA;
-                        }
-                    }
+                    // Fase de giro solo cuando está en CRUZANDO o fases de giro
                     if (faseMovimiento == FaseMovimiento.GIRA_IZQUIERDA) {
                         if (posY > 270) {
                             nextY -= distancia;
                         } else {
                             faseMovimiento = FaseMovimiento.GIRA_IZQUIERDA_2;
                         }
-                    }
-                    if (faseMovimiento == FaseMovimiento.GIRA_IZQUIERDA_2) {
+                    } else if (faseMovimiento == FaseMovimiento.GIRA_IZQUIERDA_2) {
                         nextX -= distancia;
+                    } else {
+                        nextX += distancia; // Sigue recto hasta llegar al stop
                     }
                 }
             }
@@ -333,44 +296,31 @@ public abstract class Vehiculo implements Runnable {
                 if (direccion == Direccion.recto) {
                     nextX -= distancia;
                 } else if (direccion == Direccion.derecha) {
-                    if (faseMovimiento == FaseMovimiento.AVANZANDO || faseMovimiento == FaseMovimiento.CRUZANDO) {
-                        if (posX > 420) {
-                            nextX -= distancia;
-                        } else {
-                            faseMovimiento = FaseMovimiento.GIRA_DERECHA;
-                        }
-                    }
+                    // Fase de giro solo cuando está en CRUZANDO o GIRA_DERECHA
                     if (faseMovimiento == FaseMovimiento.GIRA_DERECHA) {
                         nextY -= distancia;
+                    } else {
+                        nextX -= distancia; // Sigue recto hasta llegar al stop
                     }
                 } else if (direccion == Direccion.izquierda) {
-                    if (faseMovimiento == FaseMovimiento.AVANZANDO || faseMovimiento == FaseMovimiento.CRUZANDO) {
-                        if (posX > 375) {
-                            nextX -= distancia;
-                        } else {
-                            faseMovimiento = FaseMovimiento.GIRA_IZQUIERDA;
-                        }
-                    }
+                    // Fase de giro solo cuando está en CRUZANDO o GIRA_IZQUIERDA
                     if (faseMovimiento == FaseMovimiento.GIRA_IZQUIERDA) {
                         nextY += distancia;
+                    } else {
+                        nextX -= distancia; // Sigue recto hasta llegar al stop
                     }
                 } else if (direccion == Direccion.vuelta_u) {
-                    if (faseMovimiento == FaseMovimiento.AVANZANDO || faseMovimiento == FaseMovimiento.CRUZANDO) {
-                        if (posX > 420) {
-                            nextX -= distancia;
-                        } else {
-                            faseMovimiento = FaseMovimiento.GIRA_IZQUIERDA;
-                        }
-                    }
+                    // Fase de giro solo cuando está en CRUZANDO o fases de giro
                     if (faseMovimiento == FaseMovimiento.GIRA_IZQUIERDA) {
                         if (posY < 320) {
                             nextY += distancia;
                         } else {
                             faseMovimiento = FaseMovimiento.GIRA_IZQUIERDA_2;
                         }
-                    }
-                    if (faseMovimiento == FaseMovimiento.GIRA_IZQUIERDA_2) {
+                    } else if (faseMovimiento == FaseMovimiento.GIRA_IZQUIERDA_2) {
                         nextX += distancia;
+                    } else {
+                        nextX -= distancia; // Sigue recto hasta llegar al stop
                     }
                 }
             }
@@ -383,6 +333,11 @@ public abstract class Vehiculo implements Runnable {
      * Calcula el movimiento hacia la posición asignada en la cola.
      */
     private MovimientoInfo calcularMovimientoHaciaPosicionCola() {
+        // Si ya está en posición estable, no recalcular - retornar posición actual sin movimiento
+        if (posicionColaEstabilizada) {
+            return new MovimientoInfo(posX, posY, 0);
+        }
+        
         if (!(simulationModel instanceof CruceSimulationModel cruceModel) || direccionCola == null) {
             return new MovimientoInfo(posX, posY, 0);
         }
@@ -402,9 +357,12 @@ public abstract class Vehiculo implements Runnable {
         double deltaY = targetY - posY;
         double distancia = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
         
-        if (distancia < 2.0) {
-            // ya llegó a su posición, detenerse
-            return new MovimientoInfo(posX, posY, 0);
+        // Aumentar el umbral a 5.0 para reducir micro-ajustes y almacenar posición final
+        if (distancia < 5.0) {
+            // Ya está suficientemente cerca - asignar EXACTAMENTE la posición objetivo
+            // y marcar como estabilizado para evitar futuras recalculaciones
+            posicionColaEstabilizada = true;
+            return new MovimientoInfo(targetX, targetY, 0);
         }
         
         // normalizar y aplicar velocidad reducida para posicionamiento preciso
@@ -422,6 +380,16 @@ public abstract class Vehiculo implements Runnable {
      * Aplica el movimiento calculado.
      */
     protected void aplicarMovimiento(MovimientoInfo movimiento) {
+        // Si está en cola y la distancia es cero, asignar posición exacta
+        if ((faseMovimiento == FaseMovimiento.EN_COLA || faseMovimiento == FaseMovimiento.ACERCANDOSE_A_COLA) 
+                && movimiento.distancia() == 0) {
+            // Asignación precisa para eliminar el jitter por completo
+            this.posX = movimiento.nextX();
+            this.posY = movimiento.nextY();
+            return;
+        }
+        
+        // Comportamiento normal para otros casos
         this.posX = movimiento.nextX();
         this.posY = movimiento.nextY();
     }
@@ -540,6 +508,7 @@ public abstract class Vehiculo implements Runnable {
                                 cruceOtorgado = true;
                                 tiempoCruceOtorgado = System.currentTimeMillis();
                                 direccionCola = null;
+                                posicionColaEstabilizada = false; // Reset estabilización al salir de la cola
                                 logger.info("🚶 vehículo " + id + " inicia cruce de intersección");
                             } catch (InterruptedException e) {
                                 // Si hay interrupción durante la solicitud, mantener en pare

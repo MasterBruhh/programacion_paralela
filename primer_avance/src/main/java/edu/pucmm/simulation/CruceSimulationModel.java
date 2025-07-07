@@ -59,12 +59,6 @@ public class CruceSimulationModel implements ISimulationModel {
     }
 
     @Override
-    public void eliminarVehiculo(String vehiculoId) {
-        simulationModel.removeState(vehiculoId);
-        puntoSalidaPorVehiculo.remove(vehiculoId);
-    }
-
-    @Override
     public void solicitarCruceInterseccion(String vehiculoId, TipoVehiculo tipo,
                                            double vehiculoPosX, double vehiculoPosY) throws InterruptedException {
         Long ultimaSolicitud = solicitudesCrucePendientes.get(vehiculoId);
@@ -108,6 +102,16 @@ public class CruceSimulationModel implements ISimulationModel {
             if (distancia <= distanciaProximidad) {
                 return true;
             }
+        }
+
+        // También verificar si está en el área central del cruce
+        double cruceMinX = 355;  // límite izquierdo del cruce
+        double cruceMaxX = 445;  // límite derecho del cruce
+        double cruceMinY = 250;  // límite superior del cruce
+        double cruceMaxY = 340;  // límite inferior del cruce
+        
+        if (posX >= cruceMinX && posX <= cruceMaxX && posY >= cruceMinY && posY <= cruceMaxY) {
+            return true;
         }
         
         return false;

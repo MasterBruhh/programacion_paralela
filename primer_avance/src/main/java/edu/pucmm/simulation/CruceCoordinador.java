@@ -7,6 +7,7 @@ import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Logger;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Coordinador global que asegura el orden de creación de vehículos en todo el cruce.
@@ -108,13 +109,19 @@ public class CruceCoordinador {
             return; // No es su turno, debe esperar
         }
         
-        // Adquirir el semáforo del cruce
-        cruceSemaforo.acquire();
-        
         try {
+            // Adquirir el semáforo del cruce con un timeout para evitar bloqueos indefinidos
+            boolean acquired = cruceSemaforo.tryAcquire(500, TimeUnit.MILLISECONDS);
+            
+            if (!acquired) {
+                logger.info("⏳ Vehículo " + vehiculoId + " esperando por semáforo global");
+                cruceSemaforo.acquire(); // Esperar indefinidamente si no se pudo adquirir en el timeout
+            }
+            
             // Verificar nuevamente que sigue siendo su turno (por si cambió mientras esperaba)
             if (!puedeProcedeSegunOrdenGlobal(vehiculoId)) {
                 logger.warning("⚠️ Vehículo " + vehiculoId + " perdió su turno mientras esperaba");
+                cruceSemaforo.release(); // Liberar el semáforo ya que no es su turno
                 return;
             }
             
@@ -128,6 +135,7 @@ public class CruceCoordinador {
                            "(orden de creación respetado)");
             } else {
                 logger.warning("⚠️ Error en orden global para vehículo " + vehiculoId);
+                cruceSemaforo.release(); // Liberar el semáforo en caso de error
             }
             
         } catch (Exception e) {
@@ -150,18 +158,30 @@ public class CruceCoordinador {
         }
         
         try {
+            // Guardar info del siguiente antes de eliminar el actual
+            VehiculoEnOrdenGlobal siguiente = colaGlobal.peek();
+            
+            // Eliminar el vehículo del registro
             vehiculosRegistrados.remove(vehiculoId);
             cruceOcupado.set(false);
             vehiculoActualmenteCruzando = null;
-            cruceSemaforo.release();
+            
+            // Liberar el semáforo para permitir que el siguiente proceda
+            if (cruceSemaforo.availablePermits() == 0) {
+                cruceSemaforo.release();
+                logger.info("🔓 Semáforo global liberado - disponible para siguiente vehículo");
+            }
             
             logger.info("🏁 Vehículo " + vehiculoId + " liberó cruce global");
             
-            // Mostrar siguiente en la cola para debugging
-            VehiculoEnOrdenGlobal siguiente = colaGlobal.peek();
+            // Notificar al siguiente vehículo en la cola
             if (siguiente != null) {
                 logger.info("📋 Siguiente en orden global: " + siguiente.vehiculoId() + 
                            " (creado en t=" + siguiente.timestampCreacion() + ")");
+                
+                // La notificación al siguiente ocurrirá en CruceManager.liberarCruce()
+            } else {
+                logger.info("📋 No hay más vehículos en espera");
             }
             
         } catch (Exception e) {

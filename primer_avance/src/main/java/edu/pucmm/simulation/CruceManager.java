@@ -31,10 +31,13 @@ public class CruceManager {
      * Direcciones de entrada al cruce.
      */
     public enum DireccionCruce {
-        NORTE(400, 250),   // stop line just above the intersection
-        SUR(400, 340),     // stop line just below the intersection
-        ESTE(475, 295),    // stop line at the east side (vehículos desde la derecha)
-        OESTE(325, 295);   // stop line at the west side (vehículos desde la izquierda)
+        // Coordenadas de las señales de stop usadas en la vista (main.fxml)
+        // Estas posiciones se usan para que los vehículos se detengan justo
+        // donde se muestran las señales en pantalla.
+        NORTE(330, 235),    // Stop ubicado al lado norte del cruce
+        SUR(470, 355),      // Stop ubicado al lado sur del cruce
+        ESTE(460, 230),     // Stop ubicado al lado este del cruce
+        OESTE(340, 360);    // Stop ubicado al lado oeste del cruce
 
 
         public final double posX, posY;
@@ -291,7 +294,7 @@ public class CruceManager {
 
     /**
      * Libera el cruce cuando un vehículo termina de cruzar.
-     * Ahora también libera el coordinador global.
+     * Notifica al siguiente vehículo en orden que puede intentar cruzar.
      * 
      * @param vehiculoId ID del vehículo que termina
      * @param direccionEntrada dirección desde la que entró el vehículo
@@ -307,6 +310,46 @@ public class CruceManager {
             coordinadorGlobal.liberarCruceGlobal(vehiculoId);
             
             logger.info("🏁 vehículo " + vehiculoId + " liberó cruce desde " + direccionEntrada + " (global y local)");
+            
+            // Log del siguiente vehículo en la cola global para debugging
+            var siguienteVehiculo = coordinadorGlobal.getSiguienteEnOrden();
+            if (siguienteVehiculo != null) {
+                logger.info("🚦 Siguiente vehículo en orden global: " + siguienteVehiculo.vehiculoId() + 
+                           " (creado en t=" + siguienteVehiculo.timestampCreacion() + 
+                           ", desde=" + siguienteVehiculo.direccionEntrada() + ")");
+                
+                // IMPORTANTE: Notificar a TODAS las direcciones
+                // Esto es crucial ya que cualquier dirección puede tener el siguiente vehículo
+                logger.info("📢 Notificando a TODAS las direcciones sobre cambio de estado");
+                
+                // Primero notificar a la dirección del siguiente vehículo para priorizar
+                DireccionCruce direccionSiguiente = siguienteVehiculo.direccionEntrada();
+                InterseccionManager interseccionSiguiente = intersecciones.get(direccionSiguiente);
+                if (interseccionSiguiente != null) {
+                    logger.info("📣 Notificando prioritariamente a vehículos en " + direccionSiguiente);
+                    interseccionSiguiente.notificarVehiculosEsperando();
+                    
+                    // Pequeña pausa para permitir que el siguiente vehículo reaccione primero
+                    try {
+                        Thread.sleep(50);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+                
+                // Luego notificar al resto de direcciones
+                for (DireccionCruce direccion : DireccionCruce.values()) {
+                    if (direccion != direccionSiguiente) {  // No notificar nuevamente a la dirección prioritaria
+                        InterseccionManager interseccionDir = intersecciones.get(direccion);
+                        if (interseccionDir != null) {
+                            logger.info("📣 Notificando a vehículos en " + direccion);
+                            interseccionDir.notificarVehiculosEsperando();
+                        }
+                    }
+                }
+            } else {
+                logger.info("🚦 No hay más vehículos esperando en el cruce");
+            }
         }
     }
 } 

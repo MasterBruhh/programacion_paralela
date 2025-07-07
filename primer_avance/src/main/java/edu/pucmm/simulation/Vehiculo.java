@@ -38,7 +38,7 @@ public abstract class Vehiculo implements Runnable {
     // Variables para el PARE OBLIGATORIO
     private boolean enPareObligatorio = false;
     private long tiempoInicioParada = 0;
-    private static final long TIEMPO_PARE_MINIMO = 1500; // 1.5 segundos de pare obligatorio
+    private static final long TIEMPO_PARE_MINIMO = 3000; // 3 segundos en milisegundos
 
     protected final String id;
     protected final TipoVehiculo tipo;
@@ -468,41 +468,81 @@ public abstract class Vehiculo implements Runnable {
                     // verificar si llegó a la línea de parada
                     if (estaEnLineaDeParada()) {
                         
-                        // **PARE OBLIGATORIO**: Todos los vehículos deben parar completamente
+                        // PARE OBLIGATORIO: El vehículo DEBE detenerse completamente
                         if (!enPareObligatorio) {
                             // Iniciar el PARE OBLIGATORIO
                             logger.info("🛑 vehículo " + id + " llegó al STOP - iniciando PARE OBLIGATORIO");
                             enPareObligatorio = true;
                             tiempoInicioParada = System.currentTimeMillis();
                             faseMovimiento = FaseMovimiento.EN_PARE_OBLIGATORIO;
-                            return; // NO proceder hasta completar el pare
+                            return; // NO proceder hasta completar el tiempo
                         }
                         
-                        // Verificar si ha completado el tiempo mínimo de pare
+                        // OBLIGAR a todos los vehículos a esperar al menos 3 segundos en el STOP
                         long tiempoParada = System.currentTimeMillis() - tiempoInicioParada;
                         if (tiempoParada < TIEMPO_PARE_MINIMO) {
-                            logger.fine("⏸️ vehículo " + id + " en PARE OBLIGATORIO - tiempo restante: " + 
-                                       (TIEMPO_PARE_MINIMO - tiempoParada) + "ms");
+                            // Aún no ha completado el tiempo mínimo de parada
+                            logger.fine("⏸️ vehículo " + id + " en PARE OBLIGATORIO - tiempo: " + 
+                                      tiempoParada + "ms / " + TIEMPO_PARE_MINIMO + "ms");
                             faseMovimiento = FaseMovimiento.EN_PARE_OBLIGATORIO;
-                            return; // Continuar en pare
+                            return; // NO permitir avance
                         }
                         
-                        // Ha completado el pare obligatorio - ahora verificar condiciones para proceder
-                        logger.info("✅ vehículo " + id + " completó PARE OBLIGATORIO - verificando condiciones para cruzar");
+                        // Solo después del tiempo mínimo, verificar si puede proceder
+                        logger.info("✓ vehículo " + id + " completó tiempo de PARE OBLIGATORIO");
                         
-                        // Verificar todas las condiciones antes de proceder
+                        // Verificar si es el siguiente según orden global
+                        boolean esElSiguiente = cruceModel.getCruceManager().getCoordinadorGlobal().puedeProcedeSegunOrdenGlobal(id);
+                        if (!esElSiguiente) {
+                            // No es su turno según orden global, debe seguir esperando
+                            logger.info("⏸️ vehículo " + id + " está en PARE pero debe esperar su turno global");
+                            
+                            // IMPORTANTE: Verificar si el cruce está actualmente ocupado
+                            if (cruceModel.getCruceManager().getCoordinadorGlobal().estaCruceOcupado()) {
+                                logger.info("⏸️ vehículo " + id + " espera porque el cruce está ocupado por otro vehículo");
+                            } else {
+                                // El cruce no está ocupado, verificar quién es el siguiente
+                                var siguiente = cruceModel.getCruceManager().getCoordinadorGlobal().getSiguienteEnOrden();
+                                if (siguiente != null) {
+                                    logger.info("⏸️ vehículo " + id + " espera, el siguiente en orden es: " + siguiente.vehiculoId());
+                                }
+                            }
+                            
+                            // Intentar nuevamente en el próximo tick
+                            faseMovimiento = FaseMovimiento.EN_PARE_OBLIGATORIO;
+                            return;
+                        }
+                        
+                        // Verificar si hay vehículos de emergencia que tienen prioridad
+                        if (tipo != TipoVehiculo.emergencia && hayVehiculoEmergenciaAcercandose()) {
+                            logger.info("🚨 vehículo " + id + " cede paso a vehículo de EMERGENCIA");
+                            faseMovimiento = FaseMovimiento.EN_PARE_OBLIGATORIO;
+                            return;
+                        }
+                        
+                        // Verificar otras condiciones para avanzar
                         if (puedeProcedeRestpestandoTodasLasLineas()) {
-                            logger.info("🚦 vehículo " + id + " puede proceder después del pare, solicitando cruce");
-                            simulationModel.solicitarCruceInterseccion(id, tipo, posX, posY);
-                            // Cambiar a estado de cruce - permite movimiento normal
-                            faseMovimiento = FaseMovimiento.CRUZANDO;
-                            enCola = false;
-                            enPareObligatorio = false;
-                            cruceOtorgado = true;
-                            tiempoCruceOtorgado = System.currentTimeMillis();
-                            direccionCola = null;
+                            logger.info("✅ vehículo " + id + " puede proceder después del pare, solicitando cruce");
+                            
+                            try {
+                                simulationModel.solicitarCruceInterseccion(id, tipo, posX, posY);
+                                
+                                // Cambiar a estado de cruce - permite movimiento normal
+                                faseMovimiento = FaseMovimiento.CRUZANDO;
+                                enCola = false;
+                                enPareObligatorio = false;
+                                cruceOtorgado = true;
+                                tiempoCruceOtorgado = System.currentTimeMillis();
+                                direccionCola = null;
+                                logger.info("🚶 vehículo " + id + " inicia cruce de intersección");
+                            } catch (InterruptedException e) {
+                                // Si hay interrupción durante la solicitud, mantener en pare
+                                logger.warning("⚠️ vehículo " + id + " interrumpido durante solicitud de cruce");
+                                faseMovimiento = FaseMovimiento.EN_PARE_OBLIGATORIO;
+                                Thread.currentThread().interrupt();
+                            }
                         } else {
-                            logger.fine("⏸️ vehículo " + id + " esperando después del pare - condiciones no seguras");
+                            logger.info("⏸️ vehículo " + id + " esperando después del pare obligatorio - condiciones no seguras");
                             // Mantener en el pare hasta que sea seguro proceder
                             faseMovimiento = FaseMovimiento.EN_PARE_OBLIGATORIO;
                         }
@@ -536,23 +576,38 @@ public abstract class Vehiculo implements Runnable {
             return true;
         }
         
-        // Calcular próxima posición de movimiento
+        // 1. Verificar que es el primero en el orden global
+        if (!cruceModel.getCruceManager().getCoordinadorGlobal().puedeProcedeSegunOrdenGlobal(id)) {
+            logger.fine("vehículo " + id + " no puede proceder - no es el siguiente según orden global");
+            return false;
+        }
+        
+        // 2. Verificar que no hay otro vehículo cruzando
+        if (cruceModel.getCruceManager().getCoordinadorGlobal().estaCruceOcupado()) {
+            String vehiculoCruzando = cruceModel.getCruceManager().getCoordinadorGlobal().getVehiculoCruzandoActualmente();
+            if (vehiculoCruzando != null && !vehiculoCruzando.equals(id)) {
+                logger.fine("vehículo " + id + " no puede proceder - cruce ocupado por " + vehiculoCruzando);
+                return false;
+            }
+        }
+        
+        // 3. Calcular próxima posición de movimiento
         MovimientoInfo proximoMovimiento = calcularMovimiento();
         
-        // 1. Verificar que no haya colisiones en la próxima posición
+        // 4. Verificar que no haya colisiones en la próxima posición
         if (!cruceModel.getColisionDetector().puedeMoverse(id, proximoMovimiento.nextX(), proximoMovimiento.nextY(),
                 cruceModel.getSimulationModel().getVehiculos().values())) {
             logger.fine("vehículo " + id + " no puede proceder - riesgo de colisión");
             return false;
         }
         
-        // 2. Verificar que no haya vehículos en la dirección de movimiento dentro del cruce
+        // 5. Verificar que no haya vehículos en la dirección de movimiento dentro del cruce
         if (!verificarCruceDespejado(proximoMovimiento)) {
             logger.fine("vehículo " + id + " no puede proceder - cruce no despejado");
             return false;
         }
         
-        // 3. Para vehículos normales, verificar si hay emergencias en el sistema
+        // 6. Para vehículos normales, verificar si hay emergencias en el sistema
         if (tipo == TipoVehiculo.normal) {
             // Verificar si hay emergencia en el cruce
             if (hayVehiculoEmergenciaEnElCruce()) {
@@ -560,7 +615,7 @@ public abstract class Vehiculo implements Runnable {
                 return false;
             }
             
-            // NUEVO: Verificar si hay emergencia acercándose desde cualquier dirección
+            // Verificar si hay emergencia acercándose desde cualquier dirección
             if (hayVehiculoEmergenciaAcercandose()) {
                 logger.warning("🚨 vehículo " + id + " esperando - vehículo de emergencia acercándose");
                 return false;
@@ -723,15 +778,32 @@ public abstract class Vehiculo implements Runnable {
      */
     private boolean estaEnLineaDeParada() {
         if (direccionCola == null) return false;
-        double tolerancia = 10.0; // Aumentar tolerancia para detección más temprana
+        double tolerancia = 15.0; // Tolerancia para detección de la línea de parada
         
-        // Usar las coordenadas exactas de los stop signs según el punto de salida
-        return switch (puntoSalida) {
-            case ARRIBA -> posY >= CruceManager.DireccionCruce.NORTE.posY - tolerancia;
-            case ABAJO -> posY <= CruceManager.DireccionCruce.SUR.posY + tolerancia;
-            case IZQUIERDA -> posX >= CruceManager.DireccionCruce.OESTE.posX - tolerancia;
-            case DERECHA -> posX <= CruceManager.DireccionCruce.ESTE.posX + tolerancia;
-        };
+        // Determinar la dirección adecuada según punto de salida
+        CruceManager.DireccionCruce direccionStop;
+        
+        // Mapeo de PuntoSalida a DireccionCruce correspondiente para el stop
+        switch (puntoSalida) {
+            case ARRIBA:
+                direccionStop = CruceManager.DireccionCruce.NORTE;
+                return Math.abs(posY - direccionStop.posY) < tolerancia;
+                
+            case ABAJO:
+                direccionStop = CruceManager.DireccionCruce.SUR;
+                return Math.abs(posY - direccionStop.posY) < tolerancia;
+                
+            case IZQUIERDA:
+                direccionStop = CruceManager.DireccionCruce.OESTE;
+                return Math.abs(posX - direccionStop.posX) < tolerancia;
+                
+            case DERECHA:
+                direccionStop = CruceManager.DireccionCruce.ESTE;
+                return Math.abs(posX - direccionStop.posX) < tolerancia;
+                
+            default:
+                return false;
+        }
     }
 
     /**

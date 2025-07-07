@@ -17,7 +17,11 @@ public class CruceSimulationModel implements ISimulationModel {
     private final CruceManager cruceManager;
     private final ColisionDetector colisionDetector;
 
-    private static final double DISTANCIA_PROXIMIDAD_INTERSECCION = 25.0;
+    // Distancia utilizada para considerar que un vehículo se encuentra cerca de
+    // alguna de las intersecciones.  Al actualizar las coordenadas de las
+    // señales de stop se incrementa este valor para que la detección ocurra
+    // cuando el vehículo se acerca a dichas señales.
+    private static final double DISTANCIA_PROXIMIDAD_INTERSECCION = 110.0;
     private final ConcurrentHashMap<String, Long> solicitudesCrucePendientes = new ConcurrentHashMap<>();
     private static final long TIMEOUT_SOLICITUD_CRUCE = 5000; // 5 segundos
 
@@ -84,6 +88,10 @@ public class CruceSimulationModel implements ISimulationModel {
 
     @Override
     public boolean estaCercaDeInterseccion(String vehiculoId, double posX, double posY) {
+        // Distancia utilizada para considerar que un vehículo se encuentra cerca de
+        // alguna de las intersecciones
+        double distanciaProximidad = 75.0; // Reducida a un valor más preciso
+        
         // Verificar proximidad a cualquier intersección usando distancia simple
         for (CruceManager.DireccionCruce direccion : CruceManager.DireccionCruce.values()) {
             double distancia = Math.sqrt(
@@ -91,7 +99,7 @@ public class CruceSimulationModel implements ISimulationModel {
                 Math.pow(posY - direccion.posY, 2)
             );
             
-            if (distancia <= DISTANCIA_PROXIMIDAD_INTERSECCION) {
+            if (distancia <= distanciaProximidad) {
                 return true;
             }
         }

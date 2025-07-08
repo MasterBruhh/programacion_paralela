@@ -151,6 +151,29 @@ public abstract class Vehiculo implements Runnable {
 
         // 7. lógica específica del tipo de vehículo
         executeTypeSpecificLogic();
+        
+        // 8. NUEVO: Verificar si el vehículo ha llegado a su destino y puede ser removido
+        if (haLlegadoADestino() && destinoEstaLibre()) {
+            logger.info("🏁 Vehículo " + id + " ha llegado a destino libre, removiéndolo...");
+            
+            if (cruceOtorgado) {
+                if (simulationModel instanceof CruceSimulationModel cruceModel) {
+                    // Liberar el cruce antes de eliminar
+                    cruceModel.liberarCruceInterseccion(id, posX, posY);
+                }
+            }
+            
+            // Eliminar del modelo y detener el hilo
+            if (simulationModel instanceof CruceSimulationModel cruceSim) {
+                cruceSim.eliminarVehiculo(id);
+            } else {
+                simulationModel.eliminarVehiculo(id);
+            }
+            
+            // Remover de la lista de vehículos activos en el controlador
+            running.set(false);
+            return;
+        }
     }
 
     /**
@@ -517,11 +540,22 @@ public abstract class Vehiculo implements Runnable {
                             return;
                         }
                         
+                        // CRITICAL FIX: Check if this vehicle has emergency priority to clear the path
+                        CruceManager cruceManager = cruceModel.getCruceManager();
+                        boolean tieneProtocoloEmergencia = cruceManager.hayEmergenciaActiva() && 
+                                                          direccionCola == cruceManager.getDireccionEmergencia();
+                        
                         // Verificar si hay vehículos de emergencia que tienen prioridad
-                        if (tipo != TipoVehiculo.emergencia && hayVehiculoEmergenciaAcercandose()) {
+                        // PERO NO si este vehículo tiene prioridad de emergencia para despejar el camino
+                        if (tipo != TipoVehiculo.emergencia && !tieneProtocoloEmergencia && hayVehiculoEmergenciaAcercandose()) {
                             logger.info("🚨 vehículo " + id + " cede paso a vehículo de EMERGENCIA");
                             faseMovimiento = FaseMovimiento.EN_PARE_OBLIGATORIO;
                             return;
+                        }
+                        
+                        // Si tiene protocolo de emergencia, debe proceder para despejar el camino
+                        if (tieneProtocoloEmergencia) {
+                            logger.info("🚨 vehículo " + id + " DEBE PROCEDER para despejar el camino de emergencia");
                         }
                         
                         // Verificar otras condiciones para avanzar
@@ -558,26 +592,16 @@ public abstract class Vehiculo implements Runnable {
                 }
             }
             
-            // verificar si debe liberar el cruce (ya no está en el área del cruce)
+            // MODIFICACIÓN: Ya no removemos el vehículo aquí - ahora lo haremos en executeTick
+            // La verificación para liberar el cruce permanece aquí
             if (cruceOtorgado && !simulationModel.estaCercaDeInterseccion(id, posX, posY)) {
                 // verificar que haya pasado suficiente tiempo para asegurar que cruzó completamente
                 long tiempoEnCruce = System.currentTimeMillis() - tiempoCruceOtorgado;
                 if (tiempoEnCruce > 500) { // mínimo 500ms para cruzar
+                    // Solo liberar el cruce aquí, la remoción se hará en el executeTick si el destino está libre
                     cruceModel.liberarCruceInterseccion(id, posX, posY);
                     cruceOtorgado = false;
                     faseMovimiento = FaseMovimiento.AVANZANDO; // volver a movimiento normal
-                    logger.info("🏁 vehículo " + id + " terminó de cruzar, liberando intersección");
-
-
-                    // Eliminar el vehículo del modelo y detener su hilo
-                    if (simulationModel instanceof CruceSimulationModel cruceSim) {
-                        cruceSim.eliminarVehiculo(id);
-                    } else {
-                        simulationModel.eliminarVehiculo(id);
-                    }
-                    SimulationController.getVehiculosActivos().remove(this);
-                    running.set(false);
-                    return;
                 }
             }
         }
@@ -592,6 +616,36 @@ public abstract class Vehiculo implements Runnable {
             return true;
         }
         
+        // NUEVO: Verificar protocolo de emergencia activo
+        CruceManager cruceManager = cruceModel.getCruceManager();
+        if (cruceManager.hayEmergenciaActiva() && direccionCola != null) {
+            // Si hay emergencia activa y este vehículo no es de la dirección de emergencia
+            if (direccionCola != cruceManager.getDireccionEmergencia()) {
+                logger.info("🚨 vehículo " + id + " esperando - protocolo de emergencia activo en " + 
+                           cruceManager.getDireccionEmergencia());
+                return false;
+            }
+            
+            // Si es de la dirección de emergencia, verificar si puede proceder
+            if (direccionCola == cruceManager.getDireccionEmergencia()) {
+                CalleQueue cola = cruceManager.getColaDireccion(direccionCola);
+                if (cola != null) {
+                    int miPosicion = cola.getPosicion(id);
+                    String vehiculoEmergenciaId = cruceManager.getVehiculoEmergenciaId();
+                    
+                    if (vehiculoEmergenciaId != null && !vehiculoEmergenciaId.equals(id)) {
+                        int posEmergencia = cola.getPosicion(vehiculoEmergenciaId);
+                        
+                        // Si la emergencia está delante de mí (posición menor), debo esperar
+                        if (posEmergencia != -1 && posEmergencia < miPosicion) {
+                            logger.info("⏸️ vehículo " + id + " esperando - vehículo de emergencia delante en posición " + posEmergencia);
+                            return false;
+                        }
+                    }
+                }
+            }
+        }
+
         // 1. Verificar que es el primero en el orden global
         if (!cruceModel.getCruceManager().getCoordinadorGlobal().puedeProcedeSegunOrdenGlobal(id)) {
             logger.fine("vehículo " + id + " no puede proceder - no es el siguiente según orden global");
@@ -625,6 +679,15 @@ public abstract class Vehiculo implements Runnable {
         
         // 6. Para vehículos normales, verificar si hay emergencias en el sistema
         if (tipo == TipoVehiculo.normal) {
+            // NUEVO: Si este vehículo tiene prioridad por protocolo de emergencia, no ceder
+            // Esto evita que un vehículo con prioridad de emergencia ceda el paso
+            if (cruceManager.hayEmergenciaActiva() && direccionCola == cruceManager.getDireccionEmergencia()) {
+                // Este vehículo está en la dirección de emergencia y tiene prioridad, no ceder
+                logger.fine("vehículo " + id + " tiene prioridad por protocolo de emergencia - no cede paso");
+                logger.fine("vehículo " + id + " todas las condiciones verificadas - puede proceder");
+                return true;
+            }
+            
             // Verificar si hay emergencia en el cruce
             if (hayVehiculoEmergenciaEnElCruce()) {
                 logger.fine("vehículo " + id + " esperando - vehículo de emergencia en el cruce");
@@ -964,5 +1027,137 @@ public abstract class Vehiculo implements Runnable {
             default:
                 return false;
         }
+    }
+    
+    /**
+     * Verifica si el vehículo ha llegado a su destino final y puede ser removido.
+     * Un vehículo llega a su destino cuando ha completado el cruce y ya no está
+     * cerca de la intersección.
+     */
+    private boolean haLlegadoADestino() {
+        // Si el vehículo no ha obtenido permiso de cruce, no ha llegado
+        if (!cruceOtorgado) {
+            return false;
+        }
+        
+        // Si todavía está cerca de la intersección, no ha llegado
+        if (simulationModel.estaCercaDeInterseccion(id, posX, posY)) {
+            return false;
+        }
+        
+        // Verificar que ha pasado suficiente tiempo desde que se otorgó el cruce
+        long tiempoEnCruce = System.currentTimeMillis() - tiempoCruceOtorgado;
+        if (tiempoEnCruce <= 500) { // mínimo 500ms para cruzar
+            return false;
+        }
+        
+        return true;
+    }
+    
+    /**
+     * Verifica si el punto de destino está libre para permitir la remoción del vehículo.
+     * Un destino está libre si no hay otros vehículos en un radio cercano.
+     */
+    private boolean destinoEstaLibre() {
+        if (!(simulationModel instanceof CruceSimulationModel cruceModel)) {
+            return true; // Si no es un modelo de cruce, asumimos que está libre
+        }
+        
+        // Calcular el punto de destino basado en la dirección del vehículo y punto de salida
+        double destinoX = calcularPuntoDestinoX();
+        double destinoY = calcularPuntoDestinoY();
+        
+        // Radio de verificación para considerar un destino ocupado
+        double radioVerificacion = 30.0;
+        
+        // Consultar al CruceManager si el destino está ocupado
+        CruceManager cruceManager = cruceModel.getCruceManager();
+        String vehiculoOcupando = cruceManager.estaDestinoOcupado(destinoX, destinoY, radioVerificacion);
+        
+        // Si no está ocupado, marcarlo como ocupado por este vehículo
+        if (vehiculoOcupando == null) {
+            cruceManager.marcarDestinoOcupado(id, destinoX, destinoY);
+            return true;
+        }
+        
+        // Si está ocupado por este mismo vehículo, considerarlo libre (para poder eliminar el vehículo)
+        if (vehiculoOcupando.equals(id)) {
+            return true;
+        }
+        
+        // Destino ocupado por otro vehículo
+        logger.info("🚫 Destino (" + String.format("%.1f", destinoX) + ", " + 
+                   String.format("%.1f", destinoY) + ") ocupado por " + vehiculoOcupando + 
+                   ", vehículo " + id + " debe esperar");
+        
+        return false;
+    }
+    
+    /**
+     * Calcula la coordenada X del punto de destino basado en la dirección y punto de salida.
+     */
+    private double calcularPuntoDestinoX() {
+        // Calcular punto de destino basado en la dirección y punto de salida
+        switch (puntoSalida) {
+            case ARRIBA:
+                if (direccion == Direccion.recto) return posX; // Sigue hacia abajo
+                if (direccion == Direccion.derecha) return posX - 100; // Sale hacia la izquierda
+                if (direccion == Direccion.izquierda) return posX + 100; // Sale hacia la derecha
+                if (direccion == Direccion.vuelta_u) return posX; // Vuelve hacia arriba
+                break;
+            case ABAJO:
+                if (direccion == Direccion.recto) return posX; // Sigue hacia arriba
+                if (direccion == Direccion.derecha) return posX + 100; // Sale hacia la derecha
+                if (direccion == Direccion.izquierda) return posX - 100; // Sale hacia la izquierda
+                if (direccion == Direccion.vuelta_u) return posX; // Vuelve hacia abajo
+                break;
+            case IZQUIERDA:
+                if (direccion == Direccion.recto) return posX + 100; // Sigue hacia la derecha
+                if (direccion == Direccion.derecha) return posX; // Sale hacia abajo
+                if (direccion == Direccion.izquierda) return posX; // Sale hacia arriba
+                if (direccion == Direccion.vuelta_u) return posX - 100; // Vuelve hacia la izquierda
+                break;
+            case DERECHA:
+                if (direccion == Direccion.recto) return posX - 100; // Sigue hacia la izquierda
+                if (direccion == Direccion.derecha) return posX; // Sale hacia arriba
+                if (direccion == Direccion.izquierda) return posX; // Sale hacia abajo
+                if (direccion == Direccion.vuelta_u) return posX + 100; // Vuelve hacia la derecha
+                break;
+        }
+        return posX;
+    }
+    
+    /**
+     * Calcula la coordenada Y del punto de destino basado en la dirección y punto de salida.
+     */
+    private double calcularPuntoDestinoY() {
+        // Calcular punto de destino basado en la dirección y punto de salida
+        switch (puntoSalida) {
+            case ARRIBA:
+                if (direccion == Direccion.recto) return posY + 100; // Sigue hacia abajo
+                if (direccion == Direccion.derecha) return posY; // Sale hacia la izquierda
+                if (direccion == Direccion.izquierda) return posY; // Sale hacia la derecha
+                if (direccion == Direccion.vuelta_u) return posY - 100; // Vuelve hacia arriba
+                break;
+            case ABAJO:
+                if (direccion == Direccion.recto) return posY - 100; // Sigue hacia arriba
+                if (direccion == Direccion.derecha) return posY; // Sale hacia la derecha
+                if (direccion == Direccion.izquierda) return posY; // Sale hacia la izquierda
+                if (direccion == Direccion.vuelta_u) return posY + 100; // Vuelve hacia abajo
+                break;
+            case IZQUIERDA:
+                if (direccion == Direccion.recto) return posY; // Sigue hacia la derecha
+                if (direccion == Direccion.derecha) return posY + 100; // Sale hacia abajo
+                if (direccion == Direccion.izquierda) return posY - 100; // Sale hacia arriba
+                if (direccion == Direccion.vuelta_u) return posY; // Vuelve hacia la izquierda
+                break;
+            case DERECHA:
+                if (direccion == Direccion.recto) return posY; // Sigue hacia la izquierda
+                if (direccion == Direccion.derecha) return posY - 100; // Sale hacia arriba
+                if (direccion == Direccion.izquierda) return posY + 100; // Sale hacia abajo
+                if (direccion == Direccion.vuelta_u) return posY; // Vuelve hacia la derecha
+                break;
+        }
+        return posY;
     }
 }

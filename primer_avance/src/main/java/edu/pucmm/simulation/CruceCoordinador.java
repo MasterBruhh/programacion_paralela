@@ -69,11 +69,27 @@ public class CruceCoordinador {
     
     /**
      * Verifica si un vehículo puede proceder a cruzar según el orden global.
+     * Durante protocolo de emergencia, los vehículos de la dirección de emergencia tienen prioridad.
      * 
      * @param vehiculoId ID del vehículo que quiere cruzar
      * @return true si es su turno según el orden global
      */
     public boolean puedeProcedeSegunOrdenGlobal(String vehiculoId) {
+        // Durante protocolo de emergencia, verificar prioridad especial
+        if (hayProtocoloEmergenciaActivo()) {
+            VehiculoEnOrdenGlobal vehiculo = vehiculosRegistrados.get(vehiculoId);
+            if (vehiculo != null && vehiculo.direccionEntrada() == direccionEmergenciaActiva) {
+                // Vehículos de la dirección de emergencia tienen prioridad
+                logger.info("✅ Vehículo " + vehiculoId + " tiene prioridad por protocolo de emergencia");
+                return true;
+            } else {
+                // Vehículos de otras direcciones deben esperar
+                logger.info("⏸️ Vehículo " + vehiculoId + " debe esperar - protocolo de emergencia activo");
+                return false;
+            }
+        }
+        
+        // Operación normal: verificar orden de creación
         VehiculoEnOrdenGlobal siguienteEnOrden = colaGlobal.peek();
         
         if (siguienteEnOrden == null) {
@@ -92,6 +108,91 @@ public class CruceCoordinador {
         return esSuTurno;
     }
     
+    private boolean protocoloEmergenciaActivo = false;
+    private CruceManager.DireccionCruce direccionEmergenciaActiva = null;
+    
+    /**
+     * Activa el protocolo de emergencia para una dirección específica.
+     * @param direccion dirección donde está la emergencia
+     */
+    public void activarProtocoloEmergencia(CruceManager.DireccionCruce direccion) {
+        this.protocoloEmergenciaActivo = true;
+        this.direccionEmergenciaActiva = direccion;
+        logger.warning("🚨 Protocolo de emergencia activado en coordinador para dirección: " + direccion);
+    }
+    
+    /**
+     * Desactiva el protocolo de emergencia.
+     */
+    public void desactivarProtocoloEmergencia() {
+        this.protocoloEmergenciaActivo = false;
+        this.direccionEmergenciaActiva = null;
+        
+        // CRITICAL: Cleanup any inconsistent state after emergency protocol
+        limpiarEstadoPostEmergencia();
+        
+        logger.warning("🚨 Protocolo de emergencia desactivado en coordinador");
+    }
+    
+    /**
+     * Limpia cualquier estado inconsistente después del protocolo de emergencia.
+     * Esto asegura que la cola global esté en un estado válido para reanudar operaciones normales.
+     */
+    private void limpiarEstadoPostEmergencia() {
+        logger.info("🧹 Limpiando estado post-emergencia...");
+        
+        // Verificar si hay un semáforo bloqueado sin vehículo activo
+        if (cruceOcupado.get() && vehiculoActualmenteCruzando == null) {
+            logger.warning("⚠️ Semáforo bloqueado sin vehículo activo - liberando");
+            cruceOcupado.set(false);
+            if (cruceSemaforo.availablePermits() == 0) {
+                cruceSemaforo.release();
+            }
+        }
+        
+        // Verificar si el vehículo "actualmente cruzando" ya no está registrado
+        if (vehiculoActualmenteCruzando != null && !vehiculosRegistrados.containsKey(vehiculoActualmenteCruzando)) {
+            logger.warning("⚠️ Vehículo cruzando " + vehiculoActualmenteCruzando + " no está registrado - limpiando estado");
+            vehiculoActualmenteCruzando = null;
+            cruceOcupado.set(false);
+            if (cruceSemaforo.availablePermits() == 0) {
+                cruceSemaforo.release();
+            }
+        }
+        
+        // Revisar la cola global y remover cualquier vehículo que ya no esté registrado
+        boolean colaModificada = false;
+        while (!colaGlobal.isEmpty()) {
+            VehiculoEnOrdenGlobal siguiente = colaGlobal.peek();
+            if (siguiente != null && !vehiculosRegistrados.containsKey(siguiente.vehiculoId())) {
+                logger.warning("⚠️ Removiendo vehículo inactivo de cola global: " + siguiente.vehiculoId());
+                colaGlobal.poll();
+                colaModificada = true;
+            } else {
+                break; // El próximo vehículo está activo, mantener cola
+            }
+        }
+        
+        if (colaModificada) {
+            VehiculoEnOrdenGlobal siguiente = colaGlobal.peek();
+            if (siguiente != null) {
+                logger.info("📋 Nuevo siguiente en orden global después de limpieza: " + siguiente.vehiculoId());
+            } else {
+                logger.info("📋 Cola global vacía después de limpieza");
+            }
+        }
+        
+        logger.info("✅ Limpieza post-emergencia completada");
+    }
+    
+    /**
+     * Verifica si hay un protocolo de emergencia activo.
+     * @return true si hay protocolo de emergencia activo
+     */
+    public boolean hayProtocoloEmergenciaActivo() {
+        return protocoloEmergenciaActivo;
+    }
+    
     /**
      * Solicita permiso para cruzar el cruce completo.
      * Solo el vehículo con el timestamp de creación más antiguo puede proceder.
@@ -103,10 +204,22 @@ public class CruceCoordinador {
     public void solicitarCruceGlobal(String vehiculoId, TipoVehiculo tipo) throws InterruptedException {
         logger.info("🚦 Vehículo " + vehiculoId + " solicita cruce en orden global");
         
+        // Durante protocolo de emergencia, verificar si es de la dirección de emergencia
+        if (hayProtocoloEmergenciaActivo()) {
+            VehiculoEnOrdenGlobal vehiculo = vehiculosRegistrados.get(vehiculoId);
+            if (vehiculo != null && vehiculo.direccionEntrada() == direccionEmergenciaActiva) {
+                logger.info("🚨 Vehículo " + vehiculoId + " procede con prioridad de emergencia");
+                // Durante emergencia, los vehículos de la dirección de emergencia tienen prioridad inmediata
+            } else {
+                logger.info("⏸️ Vehículo " + vehiculoId + " debe esperar - protocolo de emergencia activo");
+                return; // No es de la dirección de emergencia, debe esperar
+            }
+        } else {
         // Verificar si es su turno en el orden global
         if (!puedeProcedeSegunOrdenGlobal(vehiculoId)) {
             logger.info("⏸️ Vehículo " + vehiculoId + " debe esperar su turno en orden global");
             return; // No es su turno, debe esperar
+            }
         }
         
         try {
@@ -118,11 +231,14 @@ public class CruceCoordinador {
                 cruceSemaforo.acquire(); // Esperar indefinidamente si no se pudo adquirir en el timeout
             }
             
+            // Para emergencias, no verificar de nuevo el orden ya que tienen prioridad absoluta
+            if (!hayProtocoloEmergenciaActivo()) {
             // Verificar nuevamente que sigue siendo su turno (por si cambió mientras esperaba)
             if (!puedeProcedeSegunOrdenGlobal(vehiculoId)) {
                 logger.warning("⚠️ Vehículo " + vehiculoId + " perdió su turno mientras esperaba");
                 cruceSemaforo.release(); // Liberar el semáforo ya que no es su turno
                 return;
+                }
             }
             
             // Remover de la cola global ya que va a cruzar
@@ -131,8 +247,8 @@ public class CruceCoordinador {
                 cruceOcupado.set(true);
                 vehiculoActualmenteCruzando = vehiculoId;
                 
-                logger.info("✅ Vehículo " + vehiculoId + " obtuvo permiso de cruce global " +
-                           "(orden de creación respetado)");
+                String tipoMensaje = hayProtocoloEmergenciaActivo() ? "con prioridad de emergencia" : "(orden de creación respetado)";
+                logger.info("✅ Vehículo " + vehiculoId + " obtuvo permiso de cruce global " + tipoMensaje);
             } else {
                 logger.warning("⚠️ Error en orden global para vehículo " + vehiculoId);
                 cruceSemaforo.release(); // Liberar el semáforo en caso de error
@@ -146,6 +262,33 @@ public class CruceCoordinador {
         // NO liberar el semáforo aquí - se liberará cuando termine de cruzar
     }
     
+
+    /**
+     * Otorga permiso inmediato a un vehículo de emergencia ignorando el orden global.
+     */
+    public void solicitarCruceEmergencia(String vehiculoId) throws InterruptedException {
+        logger.info("🚨 Permiso de cruce de emergencia para " + vehiculoId);
+
+        try {
+            boolean acquired = cruceSemaforo.tryAcquire(500, TimeUnit.MILLISECONDS);
+            if (!acquired) {
+                cruceSemaforo.acquire();
+            }
+
+            VehiculoEnOrdenGlobal vehiculo = vehiculosRegistrados.remove(vehiculoId);
+            if (vehiculo != null) {
+                colaGlobal.remove(vehiculo);
+            }
+
+            cruceOcupado.set(true);
+            vehiculoActualmenteCruzando = vehiculoId;
+        } catch (Exception e) {
+            logger.warning("Error otorgando cruce de emergencia para " + vehiculoId + ": " + e.getMessage());
+            cruceSemaforo.release();
+            throw e;
+        }
+    }
+
     /**
      * Libera el permiso de cruce global cuando el vehículo termina de cruzar.
      * 
@@ -186,6 +329,51 @@ public class CruceCoordinador {
             
         } catch (Exception e) {
             logger.warning("Error al liberar cruce global para " + vehiculoId + ": " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Remueve completamente un vehículo de todo el estado del coordinador.
+     * Se usa cuando un vehículo es eliminado de la simulación.
+     * 
+     * @param vehiculoId ID del vehículo a remover
+     */
+    public void removerVehiculoCompletamente(String vehiculoId) {
+        logger.info("🗑️ Removiendo vehículo " + vehiculoId + " completamente del coordinador");
+        
+        // Remover de vehiculosRegistrados
+        VehiculoEnOrdenGlobal vehiculoRemovido = vehiculosRegistrados.remove(vehiculoId);
+        
+        // Remover de la cola global
+        if (vehiculoRemovido != null) {
+            boolean removidoDeCola = colaGlobal.remove(vehiculoRemovido);
+            if (removidoDeCola) {
+                logger.info("📋 Vehículo " + vehiculoId + " removido de cola global");
+            }
+        }
+        
+        // Si este vehículo estaba cruzando actualmente, limpiar el estado
+        if (vehiculoId.equals(vehiculoActualmenteCruzando)) {
+            logger.warning("⚠️ Vehículo eliminado " + vehiculoId + " estaba cruzando - liberando estado");
+            vehiculoActualmenteCruzando = null;
+            cruceOcupado.set(false);
+            
+            // Liberar semáforo si estaba bloqueado
+            if (cruceSemaforo.availablePermits() == 0) {
+                cruceSemaforo.release();
+                logger.info("🔓 Semáforo liberado por eliminación de vehículo");
+            }
+            
+            // NUEVO: Limpieza adicional para evitar inconsistencias
+            limpiarEstadoPostEmergencia();
+        }
+        
+        // Log del estado actual para debugging
+        VehiculoEnOrdenGlobal siguiente = colaGlobal.peek();
+        if (siguiente != null) {
+            logger.info("📋 Siguiente en orden global: " + siguiente.vehiculoId());
+        } else {
+            logger.info("📋 Cola global ahora vacía");
         }
     }
     

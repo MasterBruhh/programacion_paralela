@@ -26,13 +26,17 @@ public class CruceManager {
     private final Map<DireccionCruce, CalleQueue> colasPorCalle;
     private final ColisionDetector colisionDetector;
     private final CruceCoordinador coordinadorGlobal;
+
+    private volatile boolean emergenciaActiva = false;
+    private volatile DireccionCruce direccionEmergencia = null;
+    private volatile String vehiculoEmergenciaId = null;
     
     /**
      * Direcciones de entrada al cruce.
      */
     public enum DireccionCruce {
         // Coordenadas de las señales de stop usadas en la vista (main.fxml)
-        // Estas posiciones se usan para que los vehículos se detengan justo
+        // Estas posiciones se usan para que los vehículos se detenen justo
         // donde se muestran las señales en pantalla.
         NORTE(330, 235),    // Stop ubicado al lado norte del cruce
         SUR(470, 355),      // Stop ubicado al lado sur del cruce
@@ -116,6 +120,16 @@ public class CruceManager {
         coordinadorGlobal.registrarVehiculo(vehiculoId, timestampCreacion, TipoVehiculo.emergencia, direccion);
         
         cola.procesarVehiculoEmergencia(vehiculoId, timestampCreacion);
+
+        // Activar protocolo de emergencia
+        emergenciaActiva = true;
+        direccionEmergencia = direccion;
+        vehiculoEmergenciaId = vehiculoId;
+        
+        // Notificar al coordinador global sobre el protocolo de emergencia
+        coordinadorGlobal.activarProtocoloEmergencia(direccion);
+        
+        logger.warning("🚨 PROTOCOLO DE EMERGENCIA ACTIVADO en " + direccion + " para vehículo " + vehiculoId);
     }
     
     /**
@@ -152,7 +166,7 @@ public class CruceManager {
     
     /**
      * Solicita cruzar el cruce desde una dirección específica.
-     * Ahora usa el coordinador global para respetar orden de creación.
+     * Implementa el protocolo completo de emergencia.
      * 
      * @param vehiculoId ID del vehículo
      * @param tipo tipo del vehículo  
@@ -168,25 +182,71 @@ public class CruceManager {
         if (interseccion == null || cola == null) {
             throw new IllegalArgumentException("dirección de entrada inválida: " + direccionEntrada);
         }
+
+        // PROTOCOLO DE EMERGENCIA
+        if (emergenciaActiva) {
+            // Si el vehículo no es de la dirección de emergencia, debe esperar
+            if (direccionEntrada != direccionEmergencia) {
+                logger.info("⏸️ vehículo " + vehiculoId + " detenido por emergencia activa en " + direccionEmergencia);
+            return;
+        }
+
+            // Si es de la dirección de emergencia, verificar si puede proceder
+            if (direccionEntrada == direccionEmergencia) {
+            int posVehiculo = cola.getPosicion(vehiculoId);
+            int posEmergencia = cola.getPosicion(vehiculoEmergenciaId);
+                
+                logger.info("🚨 Verificando posiciones - Vehículo " + vehiculoId + " pos=" + posVehiculo + 
+                           ", Emergencia " + vehiculoEmergenciaId + " pos=" + posEmergencia);
+                
+                // Si el vehículo está detrás de la emergencia, debe esperar
+            if (posEmergencia != -1 && posVehiculo > posEmergencia) {
+                    logger.info("⏸️ vehículo " + vehiculoId + " debe esperar - está detrás de la emergencia");
+                return;
+                }
+                
+                // Si es el vehículo de emergencia o está delante de él, puede proceder INMEDIATAMENTE
+                if (vehiculoId.equals(vehiculoEmergenciaId)) {
+                    logger.info("🚨 vehículo de emergencia " + vehiculoId + " procede con máxima prioridad");
+                } else {
+                    logger.info("🚨 vehículo " + vehiculoId + " DEBE PROCEDER para despejar el camino (pos=" + posVehiculo + 
+                               " delante de emergencia pos=" + posEmergencia + ")");
+                }
+            }
+        }
         
         // 1. Verificar que es el primero en su cola local
         if (!cola.esPrimero(vehiculoId)) {
-            logger.warning("vehículo " + vehiculoId + " no es el primero en la cola de " + 
+            logger.warning("vehículo " + vehiculoId + " no es el primero en la cola de " +
                          direccionEntrada + ", no puede cruzar aún");
             return;
         }
         
-        // 2. NUEVO: Verificar orden global de creación
-        if (!coordinadorGlobal.puedeProcedeSegunOrdenGlobal(vehiculoId)) {
-            logger.info("⏸️ vehículo " + vehiculoId + " debe esperar su turno según orden global de creación");
-            return;
+        // 2. Manejo especial para emergencias
+        if (emergenciaActiva && direccionEntrada == direccionEmergencia) {
+            // Durante emergencia, distinguir entre vehículo de emergencia y vehículos que despejan el camino
+            if (vehiculoId.equals(vehiculoEmergenciaId)) {
+                // Es el vehículo de emergencia - bypass completo
+                logger.info("🚨 vehículo de emergencia " + vehiculoId + " obtiene bypass de emergencia");
+            coordinadorGlobal.solicitarCruceEmergencia(vehiculoId);
+        } else {
+                // Es un vehículo normal que debe despejar el camino - usar prioridad de emergencia
+                logger.info("🚨 vehículo " + vehiculoId + " obtiene prioridad de emergencia para despejar camino");
+                coordinadorGlobal.solicitarCruceGlobal(vehiculoId, tipo);
+            }
+        } else if (!emergenciaActiva) {
+            // Operación normal: verificar orden global de creación
+            if (!coordinadorGlobal.puedeProcedeSegunOrdenGlobal(vehiculoId)) {
+                logger.info("⏸️ vehículo " + vehiculoId + " debe esperar su turno según orden global de creación");
+                return;
+            }
+
+            logger.info("🚦 vehículo " + vehiculoId + " solicita cruzar desde " + direccionEntrada +
+                       " en cruce " + id + " (orden global respetado)");
+
+            // 3. Solicitar permiso al coordinador global
+            coordinadorGlobal.solicitarCruceGlobal(vehiculoId, tipo);
         }
-        
-        logger.info("🚦 vehículo " + vehiculoId + " solicita cruzar desde " + direccionEntrada + 
-                   " en cruce " + id + " (orden global respetado)");
-        
-        // 3. Solicitar permiso al coordinador global
-        coordinadorGlobal.solicitarCruceGlobal(vehiculoId, tipo);
         
         // 4. Si llegó aquí, tiene permiso global, proceder con intersección local
         interseccion.solicitarCruce(vehiculoId, tipo);
@@ -313,11 +373,26 @@ public class CruceManager {
         InterseccionManager interseccion = intersecciones.get(direccionEntrada);
         
         if (interseccion != null) {
+            // Verificar si es el vehículo de emergencia
+            if (emergenciaActiva && vehiculoId.equals(vehiculoEmergenciaId)) {
+                emergenciaActiva = false;
+                direccionEmergencia = null;
+                vehiculoEmergenciaId = null;
+                
+                // Desactivar protocolo de emergencia en el coordinador
+                coordinadorGlobal.desactivarProtocoloEmergencia();
+                
+                logger.warning("🚨 FIN DE PROTOCOLO DE EMERGENCIA - Reanudando operación normal");
+            }
+            
             // Liberar intersección local
             interseccion.liberarCruce(vehiculoId);
             
             // Liberar coordinador global
             coordinadorGlobal.liberarCruceGlobal(vehiculoId);
+            
+            // NUEVO: Marcar el punto de destino como libre
+            liberarPuntoDestino(vehiculoId);
             
             logger.info("🏁 vehículo " + vehiculoId + " liberó cruce desde " + direccionEntrada + " (global y local)");
             
@@ -361,5 +436,129 @@ public class CruceManager {
                 logger.info("🚦 No hay más vehículos esperando en el cruce");
             }
         }
+    }
+    
+    // Mapa para rastrear los puntos de destino ocupados por vehículo
+    private final Map<String, DestinationPoint> destinosOcupados = new ConcurrentHashMap<>();
+    
+    /**
+     * Representa un punto de destino con su estado de ocupación.
+     */
+    private static class DestinationPoint {
+        final double x;
+        final double y;
+        final String vehiculoId;
+        final long timestamp;
+        
+        DestinationPoint(double x, double y, String vehiculoId) {
+            this.x = x;
+            this.y = y;
+            this.vehiculoId = vehiculoId;
+            this.timestamp = System.currentTimeMillis();
+        }
+    }
+    
+    /**
+     * Marca un punto de destino como ocupado por un vehículo.
+     * 
+     * @param vehiculoId ID del vehículo
+     * @param x coordenada X del destino
+     * @param y coordenada Y del destino
+     */
+    public void marcarDestinoOcupado(String vehiculoId, double x, double y) {
+        destinosOcupados.put(vehiculoId, new DestinationPoint(x, y, vehiculoId));
+        logger.info("🚩 Destino (" + String.format("%.1f", x) + ", " + 
+                   String.format("%.1f", y) + ") marcado como ocupado por " + vehiculoId);
+    }
+    
+    /**
+     * Libera el punto de destino ocupado por un vehículo.
+     * 
+     * @param vehiculoId ID del vehículo
+     */
+    public void liberarPuntoDestino(String vehiculoId) {
+        DestinationPoint punto = destinosOcupados.remove(vehiculoId);
+        if (punto != null) {
+            logger.info("🚩 Destino (" + String.format("%.1f", punto.x) + ", " + 
+                      String.format("%.1f", punto.y) + ") liberado por " + vehiculoId);
+        }
+    }
+    
+    /**
+     * Verifica si un punto de destino está ocupado.
+     * 
+     * @param x coordenada X a verificar
+     * @param y coordenada Y a verificar
+     * @param radioVerificacion radio de verificación
+     * @return ID del vehículo ocupando el destino o null si está libre
+     */
+    public String estaDestinoOcupado(double x, double y, double radioVerificacion) {
+        for (DestinationPoint punto : destinosOcupados.values()) {
+            double distancia = Math.sqrt(
+                Math.pow(x - punto.x, 2) + 
+                Math.pow(y - punto.y, 2)
+            );
+            
+            if (distancia < radioVerificacion) {
+                return punto.vehiculoId;
+            }
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Limpia los puntos de destino que llevan mucho tiempo ocupados.
+     * Esto evita que puntos de destino queden marcados como ocupados indefinidamente
+     * si ocurre algún error durante la simulación.
+     */
+    public void limpiarDestinosAntiguos() {
+        long tiempoActual = System.currentTimeMillis();
+        long tiempoMaximo = 30000; // 30 segundos
+        
+        destinosOcupados.entrySet().removeIf(entry -> {
+            DestinationPoint punto = entry.getValue();
+            boolean esAntiguo = (tiempoActual - punto.timestamp) > tiempoMaximo;
+            
+            if (esAntiguo) {
+                logger.warning("⚠️ Destino ocupado por " + punto.vehiculoId + 
+                              " eliminado por tiempo excesivo");
+            }
+            
+            return esAntiguo;
+        });
+    }
+    
+    /**
+     * Obtiene la cola de una dirección específica.
+     * @param direccion dirección de la cola
+     * @return la cola correspondiente o null si no existe
+     */
+    public CalleQueue getColaDireccion(DireccionCruce direccion) {
+        return colasPorCalle.get(direccion);
+    }
+    
+    /**
+     * Verifica si hay una emergencia activa en el sistema.
+     * @return true si hay una emergencia activa
+     */
+    public boolean hayEmergenciaActiva() {
+        return emergenciaActiva;
+    }
+    
+    /**
+     * Obtiene la dirección donde está la emergencia activa.
+     * @return dirección de la emergencia o null si no hay emergencia
+     */
+    public DireccionCruce getDireccionEmergencia() {
+        return direccionEmergencia;
+    }
+    
+    /**
+     * Obtiene el ID del vehículo de emergencia activo.
+     * @return ID del vehículo de emergencia o null si no hay emergencia
+     */
+    public String getVehiculoEmergenciaId() {
+        return vehiculoEmergenciaId;
     }
 } 

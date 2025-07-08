@@ -93,20 +93,21 @@ public class CalleQueue {
         VehiculoEnCola emergencia = new VehiculoEnCola(vehiculoEmergenciaId, timestampCreacion);
         
         // Insertar emergencia al principio, pero respetando orden de creación entre emergencias
-        int insertIndex = 0;
+        int insertIndex = colaVehiculos.size();
         for (int i = 0; i < colaVehiculos.size(); i++) {
             VehiculoEnCola v = colaVehiculos.get(i);
-            // Si encontramos una emergencia más antigua, insertar después
-            if (isVehiculoEmergencia(v.vehiculoId) && v.timestampCreacion < timestampCreacion) {
-                insertIndex = i + 1;
-            } else if (!isVehiculoEmergencia(v.vehiculoId)) {
-                // Encontramos el primer vehículo normal, insertar aquí
+            if (!isVehiculoEmergencia(v.vehiculoId)) {
+                insertIndex = i + 1; // mantener a los normales por delante
+            } else if (v.timestampCreacion <= timestampCreacion) {
+                insertIndex = i + 1; // emergencias más antiguas mantienen prioridad
+            } else {
                 break;
             }
         }
         
         colaVehiculos.add(insertIndex, emergencia);
         recalcularPosiciones();
+        ultimoCambioEnCola = System.currentTimeMillis();
         
         logger.info("vehículo de emergencia " + vehiculoEmergenciaId + " insertado en posición " + insertIndex);
     }
@@ -149,6 +150,15 @@ public class CalleQueue {
         synchronized (colaVehiculos) {
             return !colaVehiculos.isEmpty() && colaVehiculos.get(0).vehiculoId.equals(vehiculoId);
         }
+    }
+
+    /**
+     * Obtiene la posición de un vehículo en la cola.
+     * @return índice del vehículo o -1 si no está en la cola
+     */
+    public synchronized int getPosicion(String vehiculoId) {
+        Integer pos = posicionEnCola.get(vehiculoId);
+        return pos == null ? -1 : pos;
     }
     
     /**

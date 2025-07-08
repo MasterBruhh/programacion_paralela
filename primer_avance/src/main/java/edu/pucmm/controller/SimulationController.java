@@ -134,6 +134,8 @@ public class SimulationController {
             
             if (!vehiculoActivo) {
                 System.out.println("Ignorando estado de vehículo inactivo: " + v.id());
+                // También removerlo del modelo para garantizar limpieza completa
+                modelo.eliminarVehiculo(v.id());
                 continue;
             }
             

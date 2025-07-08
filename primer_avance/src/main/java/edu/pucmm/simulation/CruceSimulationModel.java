@@ -150,6 +150,9 @@ public class CruceSimulationModel implements ISimulationModel {
         solicitudesCrucePendientes.entrySet().removeIf(entry ->
                 (tiempoActual - entry.getValue()) > TIMEOUT_SOLICITUD_CRUCE * 2
         );
+        
+        // También limpiar destinos que llevan mucho tiempo ocupados
+        cruceManager.limpiarDestinosAntiguos();
     }
 
     public SimulationModel getSimulationModel() {
@@ -188,6 +191,9 @@ public class CruceSimulationModel implements ISimulationModel {
     public void eliminarVehiculo(String vehiculoId) {
         simulationModel.removeState(vehiculoId);
         puntoSalidaPorVehiculo.remove(vehiculoId);
+        
+        // CRITICAL: Also remove from global coordinator to prevent stale state
+        cruceManager.getCoordinadorGlobal().removerVehiculoCompletamente(vehiculoId);
     }
 
     /**

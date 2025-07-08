@@ -1,5 +1,6 @@
 package edu.pucmm.simulation;
 
+import edu.pucmm.model.PuntoSalida;
 import edu.pucmm.model.SimulationModel;
 import edu.pucmm.model.TipoVehiculo;
 
@@ -67,13 +68,20 @@ public class CruceEscenario1Demo {
             double posX = direccion.posX + (Math.random() - 0.5) * 20 - (direccion.posX > 0 ? 30 : -30);
             double posY = direccion.posY + (Math.random() - 0.5) * 20 - (direccion.posY > 0 ? 30 : -30);
             
-            Direccion direccionMovimiento = determinarDireccionMovimiento(direccion);
+            // Determinar punto de salida basado en la dirección del cruce
+            PuntoSalida puntoSalida = determinarPuntoSalida(direccion);
+            Direccion direccionMovimiento = determinarDireccionMovimiento(direccion, puntoSalida);
+            
+            // Timestamp de creación incremental para garantizar orden
+            long timestampCreacion = System.currentTimeMillis() + i;
             
             vehiculos[i] = new VehiculoNormal(
                 "NORMAL-" + String.format("%02d", i + 1),
                 posX, posY,
                 direccionMovimiento,
-                cruceModel
+                cruceModel,
+                puntoSalida,
+                timestampCreacion
             );
         }
         
@@ -89,26 +97,50 @@ public class CruceEscenario1Demo {
             double posX = direccion.posX + (Math.random() - 0.5) * 15 - (direccion.posX > 0 ? 40 : -40);
             double posY = direccion.posY + (Math.random() - 0.5) * 15 - (direccion.posY > 0 ? 40 : -40);
             
-            Direccion direccionMovimiento = determinarDireccionMovimiento(direccion);
+            // Determinar punto de salida basado en la dirección del cruce
+            PuntoSalida puntoSalida = determinarPuntoSalida(direccion);
+            Direccion direccionMovimiento = determinarDireccionMovimiento(direccion, puntoSalida);
+            
+            // Timestamp de creación incremental para garantizar orden
+            // Los de emergencia tienen timestamps después de los normales para probar prioridad
+            long timestampCreacion = System.currentTimeMillis() + 1000 + i;
             
             vehiculos[i] = new VehiculoEmergencia(
                 "EMG-" + String.format("%02d", i + 1),
                 posX, posY,
                 direccionMovimiento,
-                cruceModel
+                cruceModel,
+                puntoSalida,
+                timestampCreacion
             );
         }
         
         return vehiculos;
     }
     
-    private static Direccion determinarDireccionMovimiento(CruceManager.DireccionCruce direccionCruce) {
+    private static PuntoSalida determinarPuntoSalida(CruceManager.DireccionCruce direccionCruce) {
+        // Los vehículos entran desde la dirección opuesta a donde está la intersección
         return switch (direccionCruce) {
-            case NORTE -> Direccion.recto;
-            case SUR -> Direccion.vuelta_u;
-            case ESTE -> Direccion.izquierda;
-            case OESTE -> Direccion.derecha;
+            case NORTE -> PuntoSalida.ABAJO;  // Si la intersección está al norte, el vehículo viene del sur
+            case SUR -> PuntoSalida.ARRIBA;   // Si la intersección está al sur, el vehículo viene del norte
+            case ESTE -> PuntoSalida.IZQUIERDA; // Si la intersección está al este, el vehículo viene del oeste
+            case OESTE -> PuntoSalida.DERECHA;  // Si la intersección está al oeste, el vehículo viene del este
         };
+    }
+
+    private static Direccion determinarDireccionMovimiento(CruceManager.DireccionCruce direccionCruce, PuntoSalida puntoSalida) {
+        // Por simplicidad, vamos a hacer que los vehículos vayan principalmente recto
+        // con algunas variaciones
+        double random = Math.random();
+        if (random < 0.5) {
+            return Direccion.recto;
+        } else if (random < 0.75) {
+            return Direccion.derecha;
+        } else if (random < 0.9) {
+            return Direccion.izquierda;
+        } else {
+            return Direccion.vuelta_u;
+        }
     }
     
     private static Thread[] iniciarVehiculos(Vehiculo[] vehiculos, String tipo) {
@@ -219,5 +251,7 @@ public class CruceEscenario1Demo {
                            ", Emergencia: " + vehiculosEmergencia + ")");
             }
         }
+
     }
+
 } 

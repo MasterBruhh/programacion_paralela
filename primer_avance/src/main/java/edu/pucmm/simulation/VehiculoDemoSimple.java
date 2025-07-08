@@ -1,5 +1,6 @@
 package edu.pucmm.simulation;
 
+import edu.pucmm.controller.SimulationController;
 import edu.pucmm.model.SimulationModel;
 import edu.pucmm.model.TipoVehiculo;
 import edu.pucmm.model.VehiculoState;
@@ -28,8 +29,11 @@ public class VehiculoDemoSimple {
         simulationModel.addObserver(VehiculoDemoSimple::onStateChange);
         
         // crear flota de vehículos
-        Vehiculo[] vehiculos = VehiculoFactory.createFleet(5, 0.2, adapter); // 20% emergencia
-        
+        Vehiculo[] vehiculos = SimulationController.getVehiculosActivos().toArray(new Vehiculo[0]);
+        for (Vehiculo v : vehiculos) {
+            new Thread(v).start();
+        }
+
         logger.info("📊 flota creada: " + vehiculos.length + " vehículos");
         for (Vehiculo vehiculo : vehiculos) {
             logger.info("  - " + vehiculo);
@@ -145,7 +149,7 @@ public class VehiculoDemoSimple {
         @Override
         public boolean puedeAvanzar(String vehiculoId, double nextX, double nextY) {
             // implementación simple: verificar que no hay colisión con otros vehículos
-            double minDistance = 2.0; // distancia mínima entre vehículos
+            double minDistance = 10.0; // distancia mínima entre vehículos
             
             return model.getVehiculos().values().stream()
                     .filter(v -> !v.id().equals(vehiculoId))
@@ -163,10 +167,21 @@ public class VehiculoDemoSimple {
             logger.info("demo simple: ignorando solicitud de cruce para " + vehiculoId);
         }
         
+        public void liberarCruceInterseccion(String vehiculoId, double vehiculoPosX, double vehiculoPosY) {
+            // implementación vacía para demo simple
+            logger.info("demo simple: ignorando liberación de cruce para " + vehiculoId);
+        }
+        
         @Override
         public boolean estaCercaDeInterseccion(String vehiculoId, double posX, double posY) {
             // en demo simple no hay intersecciones
             return false;
         }
+
+        @Override
+        public void eliminarVehiculo(String vehiculoId) {
+            model.removeState(vehiculoId);
+        }
     }
 }
+ 

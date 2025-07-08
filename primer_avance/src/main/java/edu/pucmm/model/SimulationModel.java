@@ -1,5 +1,8 @@
 package edu.pucmm.model;
 
+import edu.pucmm.simulation.CruceManager;
+import edu.pucmm.simulation.InterseccionManager;
+import edu.pucmm.simulation.Vehiculo;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableMap;
 
@@ -87,25 +90,5 @@ public class SimulationModel {
             observer.onStateChange(snapshot);
         }
     }
-    public void simulacionFalsa() {
-        new Thread(() -> {
-            for (int i = 0; i < 2; i++) {
-                String id = "veh" + i;
-                TipoVehiculo tipo = i % 2 == 0 ? TipoVehiculo.normal : TipoVehiculo.emergencia;
-                double y = 270+(i * 50);
-                for (int x = 0; x < 100; x++) {
-                    double posX =0;
-                    if(!(i % 2 == 0))
-                        posX = 20 + x * 4;
-                    else{
-                        posX = 800 - (20 + x * 4);
-                    }
 
-                    updateState(new VehiculoState(id, posX, y, tipo));
-                    try { Thread.sleep(30); } catch (InterruptedException ignored) {}
-                }
-            }
-        }).start();
-    }
-
-} 
+}

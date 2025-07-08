@@ -1,5 +1,6 @@
 package edu.pucmm.simulation;
 
+import edu.pucmm.model.PuntoSalida;
 import edu.pucmm.model.TipoVehiculo;
 
 import java.util.concurrent.ThreadLocalRandom;
@@ -13,21 +14,20 @@ public class VehiculoEmergencia extends Vehiculo {
     
     private static final Logger logger = Logger.getLogger(VehiculoEmergencia.class.getName());
     
-    private static final double VELOCIDAD_MIN = 1.0;
-    private static final double VELOCIDAD_MAX = 4.0;
+    private static final double VELOCIDAD_UNIFICADA = 30.0; // misma velocidad que los normales
     private static final long SIRENA_INTERVAL = 2000; // notificar presencia cada 2 segundos
     
     private long lastSirenaNotification = 0;
     private boolean sirenActive = true;
     
-    public VehiculoEmergencia(String id, double posX, double posY, Direccion direccion, 
-                             ISimulationModel simulationModel) {
+    public VehiculoEmergencia(String id, double posX, double posY, Direccion direccion,
+                              ISimulationModel simulationModel, PuntoSalida puntoSalida, long timestampCreacion) {
         super(id, TipoVehiculo.emergencia, posX, posY, 
-              generateRandomVelocity(), direccion, simulationModel);
+              VELOCIDAD_UNIFICADA, direccion, simulationModel, puntoSalida, timestampCreacion);
     }
     
     private static double generateRandomVelocity() {
-        return ThreadLocalRandom.current().nextDouble(VELOCIDAD_MIN, VELOCIDAD_MAX);
+        return VELOCIDAD_UNIFICADA; // ya no es aleatoria
     }
     
     @Override
@@ -35,11 +35,7 @@ public class VehiculoEmergencia extends Vehiculo {
         // notificar presencia con sirena
         notifyPresence();
         
-        // mantener velocidad alta
-        maintainEmergencySpeed();
-        
-        // cambio de dirección más decidido hacia objetivo
-        adjustDirectionForEmergency();
+        // ya no ajustamos velocidad - todos tienen la misma
     }
     
     /**
@@ -55,31 +51,8 @@ public class VehiculoEmergencia extends Vehiculo {
     }
     
     /**
-     * Mantiene velocidad de emergencia.
-     */
-    private void maintainEmergencySpeed() {
-        // los vehículos de emergencia tienden a mantener velocidad alta
-        if (this.velocidad < VELOCIDAD_MAX * 0.8) {
-            this.velocidad = Math.min(VELOCIDAD_MAX, this.velocidad * 1.2);
-        }
-    }
-    
-    /**
      * Ajusta dirección para emergencia (más directo).
      */
-    private void adjustDirectionForEmergency() {
-        // cambio de dirección menos frecuente pero más decidido
-        if (ThreadLocalRandom.current().nextDouble() < 0.01) { // 1% probabilidad
-            // priorizar movimiento hacia adelante
-            if (ThreadLocalRandom.current().nextDouble() < 0.7) {
-                this.direccion = Direccion.recto;
-            } else {
-                // cambio lateral ocasional
-                this.direccion = ThreadLocalRandom.current().nextBoolean() ? 
-                               Direccion.derecha : Direccion.izquierda;
-            }
-        }
-    }
     
     @Override
     protected boolean puedeRealizarMovimiento(MovimientoInfo movimiento) {

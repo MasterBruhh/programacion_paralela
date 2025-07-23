@@ -18,26 +18,21 @@ java {
 }
 
 dependencies {
-    implementation("org.openjfx:javafx-controls:22")
-    implementation("org.openjfx:javafx-fxml:22")
-    implementation("org.openjfx:javafx-graphics:22")
+    implementation("org.openjfx:javafx-controls:21.0.2")
+    implementation("org.openjfx:javafx-fxml:21.0.2")
+    implementation("org.openjfx:javafx-graphics:21.0.2")
     
-    // logging
-    implementation("ch.qos.logback:logback-classic:1.5.6")
-
     testImplementation(platform("org.junit:junit-bom:5.10.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")
-    testImplementation("org.testfx:testfx-junit5:4.0.16-alpha")
 }
 
 javafx {
-    version = "22"
+    version = "21.0.2"
     modules = listOf("javafx.controls", "javafx.fxml", "javafx.graphics")
 }
 
 application {
-    // Cambia esta clase por tu clase principal real
-    mainClass.set("edu.pucmm.Main")
+    mainClass.set("edu.pucmm.trafico.Main")
 }
 
 tasks.test {

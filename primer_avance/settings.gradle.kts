@@ -1,1 +1,1 @@
-rootProject.name = "primer_avance"
+rootProject.name = "sistema-gestion-trafico"

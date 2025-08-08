@@ -1,0 +1,11 @@
+# Build y cachés
+/build/
+/.gradle/
+/target/
+
+# IDEs
+.idea/
+*.iml
+
+# Otros
+out/ 

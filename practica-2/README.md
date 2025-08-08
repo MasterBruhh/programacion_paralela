@@ -63,5 +63,29 @@ src/
 
 ## Ejecución
 
+## Ejecutando Main.java
+
 Para ejecutar el proyecto, solo es necesario compilar el código y ejecutar la clase main.
+
+### Con Maven
+
+```bash
+# Compila el proyecto (descarga dependencias y genera target/)
+mvn compile
+
+# Lanza la clase principal
+autocompletado opcional: mvn exec:java
+mvn exec:java -Dexec.mainClass=edu.pucmm.Main
+```
+
+### Con Gradle
+
+```bash
+# Compila y ejecuta en una sola orden
+gradle run
+# o usando el wrapper
+gradlew run
+```
+
+Ambos comandos abrirán un menú interactivo donde podrás elegir la topología, número de nodos y enviar mensajes entre ellos.
 

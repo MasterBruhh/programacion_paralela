@@ -45,6 +45,8 @@
                 <Menu mnemonicParsing="false" text="Acción">
                     <items>
                         <MenuItem mnemonicParsing="false" onAction="#crearVehiculo" text="Crear Vehículo"/>
+                        <!-- Nuevo: crear lote aleatorio de 15 vehículos -->
+                        <MenuItem mnemonicParsing="false" onAction="#crearLoteVehiculos" text="Crear Lote (15 aleatorios)"/>
                     </items>
                 </Menu>
 

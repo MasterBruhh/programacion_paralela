@@ -169,8 +169,8 @@ public class VehicleLifecycleManager {
             case LEFT:
                 // Salir por la izquierda desde la perspectiva del vehículo
                 switch (vehicle.getStartPoint()) {
-                    case NORTH -> targetX -= distanciaExtraSalida; // Hacia la izquierda (oeste)
-                    case SOUTH -> targetX += distanciaExtraSalida; // Hacia la derecha (este)
+                    case NORTH -> targetX += distanciaExtraSalida; // Hacia la izquierda (oeste)
+                    case SOUTH -> targetX -= distanciaExtraSalida; // Hacia la derecha (este)
                     case EAST -> targetY += distanciaExtraSalida; // Hacia abajo (sur)
                     case WEST -> targetY -= distanciaExtraSalida; // Hacia arriba (norte)
                 }
@@ -178,8 +178,8 @@ public class VehicleLifecycleManager {
             case RIGHT:
                 // Salir por la derecha desde la perspectiva del vehículo
                 switch (vehicle.getStartPoint()) {
-                    case NORTH -> targetX += distanciaExtraSalida; // Hacia la derecha (este)
-                    case SOUTH -> targetX -= distanciaExtraSalida; // Hacia la izquierda (oeste)
+                    case NORTH -> targetX -= distanciaExtraSalida; // Hacia la derecha (este)
+                    case SOUTH -> targetX += distanciaExtraSalida; // Hacia la izquierda (oeste)
                     case EAST -> targetY -= distanciaExtraSalida; // Hacia arriba (norte)
                     case WEST -> targetY += distanciaExtraSalida; // Hacia abajo (sur)
                 }

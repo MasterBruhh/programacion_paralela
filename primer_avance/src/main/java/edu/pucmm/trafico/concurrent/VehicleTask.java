@@ -25,7 +25,7 @@ public class VehicleTask implements Runnable {
     private static final double INTERSECTION_CENTER_X = 400.0;
     private static final double INTERSECTION_CENTER_Y = 295.0;
     private static final double TURN_RADIUS = 50.0; // Radio más amplio para giros suaves
-    private static final double RIGHT_TURN_RADIUS = 30.0;
+    private static final double RIGHT_TURN_RADIUS = 20.0;
     
     // Estados del vehículo
     private enum VehicleState {
@@ -294,16 +294,16 @@ public class VehicleTask implements Runnable {
             case NORTH -> {
                 // Norte hacia Oeste (giro a la izquierda)
                 double controlX = INTERSECTION_CENTER_X - 20;
-                double controlY = INTERSECTION_CENTER_Y - 20;
+                double controlY = INTERSECTION_CENTER_Y + 20;
                 
                 path.getElements().addAll(
                     new MoveTo(startX, startY),
                     // Avanzar hasta el punto de inicio del giro
-                    new LineTo(startX, INTERSECTION_CENTER_Y - TURN_RADIUS),
+                    new LineTo(startX, INTERSECTION_CENTER_Y),
                     // Realizar un giro suave con curva cuadrática
                     new QuadCurveTo(
                         controlX, controlY,
-                        INTERSECTION_CENTER_X - TURN_RADIUS, INTERSECTION_CENTER_Y
+                        INTERSECTION_CENTER_X + TURN_RADIUS, endY
                     ),
                     // Salir hacia la dirección correcta con alineación precisa
                     new LineTo(endX, endY)
@@ -312,16 +312,16 @@ public class VehicleTask implements Runnable {
             case SOUTH -> {
                 // Sur hacia Este (giro a la izquierda)
                 double controlX = INTERSECTION_CENTER_X + 20;
-                double controlY = INTERSECTION_CENTER_Y + 20;
+                double controlY = INTERSECTION_CENTER_Y - 20;
                 
                 path.getElements().addAll(
                     new MoveTo(startX, startY),
                     // Avanzar hasta el punto de inicio del giro
-                    new LineTo(startX, INTERSECTION_CENTER_Y + TURN_RADIUS),
+                    new LineTo(startX, INTERSECTION_CENTER_Y),
                     // Realizar un giro suave con curva cuadrática
                     new QuadCurveTo(
                         controlX, controlY,
-                        INTERSECTION_CENTER_X + TURN_RADIUS, INTERSECTION_CENTER_Y
+                        INTERSECTION_CENTER_X - TURN_RADIUS, endY
                     ),
                     // Salir hacia la dirección correcta con alineación precisa
                     new LineTo(endX, endY)
@@ -329,17 +329,17 @@ public class VehicleTask implements Runnable {
             }
             case EAST -> {
                 // Este hacia Sur (giro a la izquierda)
-                double controlX = INTERSECTION_CENTER_X + 20;
+                double controlX = INTERSECTION_CENTER_X - 20;
                 double controlY = INTERSECTION_CENTER_Y + 20;
-                
+
                 path.getElements().addAll(
                     new MoveTo(startX, startY),
                     // Avanzar hasta el punto de inicio del giro
-                    new LineTo(INTERSECTION_CENTER_X + TURN_RADIUS, startY),
+                    new LineTo(INTERSECTION_CENTER_X, startY),
                     // Realizar un giro suave con curva cuadrática
                     new QuadCurveTo(
                         controlX, controlY,
-                        INTERSECTION_CENTER_X, INTERSECTION_CENTER_Y + TURN_RADIUS
+                        endX, INTERSECTION_CENTER_Y + TURN_RADIUS
                     ),
                     // Salir hacia la dirección correcta con alineación precisa
                     new LineTo(endX, endY)
@@ -347,17 +347,17 @@ public class VehicleTask implements Runnable {
             }
             case WEST -> {
                 // Oeste hacia Norte (giro a la izquierda)
-                double controlX = INTERSECTION_CENTER_X - 20;
+                double controlX = INTERSECTION_CENTER_X + 20;
                 double controlY = INTERSECTION_CENTER_Y - 20;
-                
+
                 path.getElements().addAll(
                     new MoveTo(startX, startY),
                     // Avanzar hasta el punto de inicio del giro
-                    new LineTo(INTERSECTION_CENTER_X - TURN_RADIUS, startY),
+                    new LineTo(INTERSECTION_CENTER_X, startY),
                     // Realizar un giro suave con curva cuadrática
                     new QuadCurveTo(
                         controlX, controlY,
-                        INTERSECTION_CENTER_X, INTERSECTION_CENTER_Y - TURN_RADIUS
+                        endX, INTERSECTION_CENTER_Y - TURN_RADIUS
                     ),
                     // Salir hacia la dirección correcta con alineación precisa
                     new LineTo(endX, endY)
@@ -413,7 +413,7 @@ public class VehicleTask implements Runnable {
                     // Realizar un giro suave con curva cuadrática bien ajustada
                     new QuadCurveTo(
                         controlX, controlY,
-                        INTERSECTION_CENTER_X + RIGHT_TURN_RADIUS, INTERSECTION_CENTER_Y
+                        RIGHT_TURN_RADIUS, endY
                     ),
                     // Salir hacia la dirección correcta con alineación precisa
                     new LineTo(endX, endY)
@@ -431,7 +431,7 @@ public class VehicleTask implements Runnable {
                     // Realizar un giro suave con curva cuadrática bien ajustada
                     new QuadCurveTo(
                         controlX, controlY,
-                        INTERSECTION_CENTER_X - RIGHT_TURN_RADIUS, INTERSECTION_CENTER_Y
+                        INTERSECTION_CENTER_X + RIGHT_TURN_RADIUS, endY
                     ),
                     // Salir hacia la dirección correcta con alineación precisa
                     new LineTo(endX, endY)
@@ -449,7 +449,7 @@ public class VehicleTask implements Runnable {
                     // Realizar un giro suave con curva cuadrática bien ajustada
                     new QuadCurveTo(
                         controlX, controlY,
-                        INTERSECTION_CENTER_X, INTERSECTION_CENTER_Y - RIGHT_TURN_RADIUS
+                        endX, INTERSECTION_CENTER_Y - RIGHT_TURN_RADIUS
                     ),
                     // Salir hacia la dirección correcta con alineación precisa
                     new LineTo(endX, endY)
@@ -467,7 +467,7 @@ public class VehicleTask implements Runnable {
                     // Realizar un giro suave con curva cuadrática bien ajustada
                     new QuadCurveTo(
                         controlX, controlY,
-                        INTERSECTION_CENTER_X, INTERSECTION_CENTER_Y + RIGHT_TURN_RADIUS
+                        endX, INTERSECTION_CENTER_Y + RIGHT_TURN_RADIUS
                     ),
                     // Salir hacia la dirección correcta con alineación precisa
                     new LineTo(endX, endY)
@@ -504,110 +504,140 @@ public class VehicleTask implements Runnable {
         double startX = node.getCenterX();
         double startY = node.getCenterY();
         double uTurnRadius = 45.0;
-        
+
         // Obtener las coordenadas de salida para este giro específico
         double[] exitCoords = vehicle.getStartPoint().getExitCoordinates(Direction.U_TURN);
         double endX = exitCoords[0];
         double endY = exitCoords[1];
-        
+
         switch (vehicle.getStartPoint()) {
             case NORTH -> {
-                // Vuelta en U desde Norte (regresa hacia Norte)
+                final double r = uTurnRadius;
+                final double cx = INTERSECTION_CENTER_X;
+                final double cy = INTERSECTION_CENTER_Y;
+
                 path.getElements().addAll(
-                    new MoveTo(startX, startY),
-                    // Avanzar hasta el punto de inicio del giro
-                    new LineTo(startX, INTERSECTION_CENTER_Y - uTurnRadius),
-                    // Primera parte del giro de 180 grados con primer arco
-                    new ArcTo(
-                        uTurnRadius, uTurnRadius, 0,
-                        startX + 40, INTERSECTION_CENTER_Y,
-                        false, true
-                    ),
-                    // Segunda parte del giro con segundo arco para completar el giro de 180
-                    new ArcTo(
-                        uTurnRadius, uTurnRadius, 0,
-                        endX, INTERSECTION_CENTER_Y + uTurnRadius,
-                        false, true
-                    ),
-                    // Salir hacia la dirección correcta con alineación precisa
-                    new LineTo(endX, endY)
+                        new MoveTo(startX, startY),
+
+                        // Acercarse al punto de inicio del giro (parte inferior de la curva)
+                        new LineTo(startX, cy - r),
+
+                        // Primer tramo del giro: hacia la izquierda y arriba (pequeño arco, sweep=false)
+                        new ArcTo(
+                                r, r, 0,
+                                cx, cy,
+                                false, false // small-arc, sentido inverso al que tenías
+                        ),
+
+                        // Segundo tramo del giro: hacia el carril de retorno (pequeño arco, sweep=false)
+                        new ArcTo(
+                                r, r, 0,
+                                endX, cy - r,
+                                false, false
+                        ),
+
+                        // Alinear con el carril de salida (sur)
+                        new LineTo(endX, endY)
                 );
             }
             case SOUTH -> {
                 // Vuelta en U desde Sur (regresa hacia Sur)
+                final double r = uTurnRadius;
+                final double cx = INTERSECTION_CENTER_X;
+                final double cy = INTERSECTION_CENTER_Y;
+
                 path.getElements().addAll(
-                    new MoveTo(startX, startY),
-                    // Avanzar hasta el punto de inicio del giro
-                    new LineTo(startX, INTERSECTION_CENTER_Y + uTurnRadius),
-                    // Primera parte del giro de 180 grados con primer arco
-                    new ArcTo(
-                        uTurnRadius, uTurnRadius, 0,
-                        startX - 40, INTERSECTION_CENTER_Y,
-                        false, true
-                    ),
-                    // Segunda parte del giro con segundo arco para completar el giro de 180
-                    new ArcTo(
-                        uTurnRadius, uTurnRadius, 0,
-                        endX, INTERSECTION_CENTER_Y - uTurnRadius,
-                        false, true
-                    ),
-                    // Salir hacia la dirección correcta con alineación precisa
-                    new LineTo(endX, endY)
+                        new MoveTo(startX, startY),
+
+                        // Acercarse al punto de inicio del giro (parte inferior de la curva)
+                        new LineTo(startX, cy + r),
+
+                        // Primer tramo del giro: hacia la izquierda y arriba (pequeño arco, sweep=false)
+                        new ArcTo(
+                                r, r, 0,
+                                cx, cy,
+                                false, false // small-arc, sentido inverso al que tenías
+                        ),
+
+                        // Segundo tramo del giro: hacia el carril de retorno (pequeño arco, sweep=false)
+                        new ArcTo(
+                                r, r, 0,
+                                endX, cy + r,
+                                false, false
+                        ),
+
+                        // Alinear con el carril de salida (sur)
+                        new LineTo(endX, endY)
                 );
             }
             case EAST -> {
-                // Vuelta en U desde Este (regresa hacia Este)
+                final double r = uTurnRadius;
+                final double cx = INTERSECTION_CENTER_X;
+                final double cy = INTERSECTION_CENTER_Y;
+
                 path.getElements().addAll(
-                    new MoveTo(startX, startY),
-                    // Avanzar hasta el punto de inicio del giro
-                    new LineTo(INTERSECTION_CENTER_X + uTurnRadius, startY),
-                    // Primera parte del giro de 180 grados con primer arco
-                    new ArcTo(
-                        uTurnRadius, uTurnRadius, 0,
-                        INTERSECTION_CENTER_X, startY + 40,
-                        false, true
-                    ),
-                    // Segunda parte del giro con segundo arco para completar el giro de 180
-                    new ArcTo(
-                        uTurnRadius, uTurnRadius, 0,
-                        INTERSECTION_CENTER_X - uTurnRadius, endY,
-                        false, true
-                    ),
-                    // Salir hacia la dirección correcta con alineación precisa
-                    new LineTo(endX, endY)
+                        new MoveTo(startX, startY),
+
+                        // Acercarse al punto de inicio del giro (parte inferior de la curva)
+                        new LineTo(cx+r, startY),
+
+                        // Primer tramo del giro: hacia la izquierda y arriba (pequeño arco, sweep=false)
+                        new ArcTo(
+                                r, r, 0,
+                                cx, cy,
+                                false, false // small-arc, sentido inverso al que tenías
+                        ),
+
+                        // Segundo tramo del giro: hacia el carril de retorno (pequeño arco, sweep=false)
+                        new ArcTo(
+                                r, r, 0,
+                                cx+r, endY,
+                                false, false
+                        ),
+
+                        // Alinear con el carril de salida (sur)
+                        new LineTo(endX, endY)
                 );
             }
             case WEST -> {
-                // Vuelta en U desde Oeste (regresa hacia Oeste)
+                // Vuelta en U desde Sur (regresa hacia Sur)
+                final double r = uTurnRadius;
+                final double cx = INTERSECTION_CENTER_X;
+                final double cy = INTERSECTION_CENTER_Y;
+
                 path.getElements().addAll(
-                    new MoveTo(startX, startY),
-                    // Avanzar hasta el punto de inicio del giro
-                    new LineTo(INTERSECTION_CENTER_X - uTurnRadius, startY),
-                    // Primera parte del giro de 180 grados con primer arco
-                    new ArcTo(
-                        uTurnRadius, uTurnRadius, 0,
-                        INTERSECTION_CENTER_X, startY - 40,
-                        false, true
-                    ),
-                    // Segunda parte del giro con segundo arco para completar el giro de 180
-                    new ArcTo(
-                        uTurnRadius, uTurnRadius, 0,
-                        INTERSECTION_CENTER_X + uTurnRadius, endY,
-                        false, true
-                    ),
-                    // Salir hacia la dirección correcta con alineación precisa
-                    new LineTo(endX, endY)
+                        new MoveTo(startX, startY),
+
+                        // Acercarse al punto de inicio del giro (parte inferior de la curva)
+                        new LineTo(cx-r, startY),
+
+                        // Primer tramo del giro: hacia la izquierda y arriba (pequeño arco, sweep=false)
+                        new ArcTo(
+                                r, r, 0,
+                                cx, cy,
+                                false, false // small-arc, sentido inverso al que tenías
+                        ),
+
+                        // Segundo tramo del giro: hacia el carril de retorno (pequeño arco, sweep=false)
+                        new ArcTo(
+                                r, r, 0,
+                                cx-r, endY,
+                                false, false
+                        ),
+
+                        // Alinear con el carril de salida (sur)
+                        new LineTo(endX, endY)
                 );
             }
         }
-        
+
         // Guardar las coordenadas finales en el vehículo
         vehicle.updatePosition(endX, endY);
-        
+
         // Duración más larga (6s) para un giro más realista y visible
         PathTransition transition = new PathTransition(Duration.seconds(6), path, node);
         transition.setInterpolator(Interpolator.EASE_BOTH);
-        
+
         // Actualizar posición del vehículo durante la animación para mantener coherencia
         transition.currentTimeProperty().addListener((obs, oldTime, newTime) -> {
             if (newTime.toSeconds() > oldTime.toSeconds()) {
@@ -617,7 +647,7 @@ public class VehicleTask implements Runnable {
                 });
             }
         });
-        
+
         return transition;
     }
     

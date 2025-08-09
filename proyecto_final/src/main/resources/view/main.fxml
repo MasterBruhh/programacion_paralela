@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.control.MenuBar?>
+<?import javafx.scene.control.Menu?>
+<?import javafx.scene.control.MenuItem?>
+<?import javafx.scene.layout.Pane?>
+
+<BorderPane xmlns:fx="http://javafx.com/fxml"
+            fx:controller="edu.pucmm.trafico.view.TrafficSimulationController">
+
+    <top>
+        <MenuBar>
+            <menus>
+                <Menu mnemonicParsing="false" text="Punto de Salida">
+                    <items>
+                        <MenuItem id="Arriba" mnemonicParsing="false" onAction="#handleConfiguracion" text="Arriba"/>
+                        <MenuItem id="Abajo" mnemonicParsing="false" onAction="#handleConfiguracion" text="Abajo"/>
+                        <MenuItem id="Izquierda" mnemonicParsing="false" onAction="#handleConfiguracion" text="Izquierda"/>
+                        <MenuItem id="Derecha" mnemonicParsing="false" onAction="#handleConfiguracion" text="Derecha"/>
+                    </items>
+                </Menu>
+                <Menu mnemonicParsing="false" text="Tipo de Vehículo">
+                    <items>
+                        <MenuItem id="Normal" mnemonicParsing="false" onAction="#handleConfiguracion" text="Normal"/>
+                        <MenuItem id="Emergencia" mnemonicParsing="false" onAction="#handleConfiguracion" text="Emergencia"/>
+                    </items>
+                </Menu>
+                <Menu mnemonicParsing="false" text="Dirección en Cruce">
+                    <items>
+                        <MenuItem id="Recto" mnemonicParsing="false" onAction="#handleConfiguracion" text="Recto"/>
+                        <MenuItem id="VIzquierda" mnemonicParsing="false" onAction="#handleConfiguracion" text="Izquierda"/>
+                        <MenuItem id="VDerecha" mnemonicParsing="false" onAction="#handleConfiguracion" text="Derecha"/>
+                        <MenuItem id="U" mnemonicParsing="false" onAction="#handleConfiguracion" text="En U"/>
+                    </items>
+                </Menu>
+                <Menu mnemonicParsing="false" text="Acción">
+                    <items>
+                        <MenuItem mnemonicParsing="false" onAction="#crearVehiculo" text="Crear Vehículo"/>
+                        <MenuItem mnemonicParsing="false" onAction="#crearLoteVehiculos" text="Crear Lote (15 aleatorios)"/>
+                    </items>
+                </Menu>
+                <Menu mnemonicParsing="false" text="Sistema">
+                    <items>
+                        <MenuItem mnemonicParsing="false" onAction="#handleExit" text="Salir"/>
+                    </items>
+                </Menu>
+            </menus>
+        </MenuBar>
+    </top>
+
+    <center>
+        <!-- Gran lienzo para autopista, intersecciones, flechas y semáforos -->
+        <Pane fx:id="lienzo" prefWidth="1300" prefHeight="750" style="-fx-background-color: lightgray;"/>
+    </center>
+
+    <bottom>
+        <Pane prefHeight="10" />
+    </bottom>
+</BorderPane>

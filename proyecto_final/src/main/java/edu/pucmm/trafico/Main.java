@@ -12,7 +12,7 @@ public class Main extends Application {
         FXMLLoader loader = new FXMLLoader(getClass().getResource("/view/main.fxml"));
         Scene scene = new Scene(loader.load());
         
-        primaryStage.setTitle("Sistema de Gestión de Tráfico.");
+        primaryStage.setTitle("Sistema de Gestión de Tráfico");
         primaryStage.setScene(scene);
         primaryStage.setOnCloseRequest(e -> System.exit(0));
         primaryStage.show();

@@ -1,10 +1,7 @@
 package edu.pucmm.trafico.concurrent;
 
-import edu.pucmm.trafico.model.Vehicle;
-import edu.pucmm.trafico.model.VehicleType;
-import java.util.concurrent.Semaphore;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.PriorityBlockingQueue;
+import edu.pucmm.trafico.model.*;
+import java.util.concurrent.*;
 import java.util.Comparator;
 
 public class IntersectionSemaphore {
@@ -14,12 +11,19 @@ public class IntersectionSemaphore {
     public IntersectionSemaphore() {
         this.semaphore = new Semaphore(1, true);
         this.waitingQueue = new PriorityBlockingQueue<>(100, 
-            Comparator.comparing((Vehicle v) -> v.getType() == VehicleType.EMERGENCY ? 0 : 1)
-                      .thenComparing(Vehicle::getId));
+            Comparator.comparing((Vehicle v) -> {
+                if (v.isHighwayVehicle()) return 0;
+                if (v.getType() == VehicleType.EMERGENCY) return 1;
+                return 2;
+            }).thenComparing(Vehicle::getId));
     }
     
     public boolean tryAcquire(Vehicle vehicle, long timeout, TimeUnit unit) throws InterruptedException {
         waitingQueue.offer(vehicle);
+        
+        if (!vehicle.isHighwayVehicle() && hasHighwayVehicleWaiting()) {
+            return false;
+        }
         
         if (waitingQueue.peek() != vehicle) {
             return false;
@@ -35,6 +39,10 @@ public class IntersectionSemaphore {
     
     public void release() {
         semaphore.release();
+    }
+    
+    private boolean hasHighwayVehicleWaiting() {
+        return waitingQueue.stream().anyMatch(Vehicle::isHighwayVehicle);
     }
     
     public boolean hasWaitingVehicles() {

@@ -6,16 +6,13 @@ import javafx.scene.shape.Circle;
 import javafx.scene.shape.Rectangle;
 import javafx.scene.transform.Rotate;
 
-/**
- * Representa un semáforo físico para la simulación (con referencia a sus luces gráficas).
- */
 public class TrafficLight {
     private Group node;
     private Circle redLight;
     private Circle yellowLight;
     private Circle greenLight;
     private TrafficLightState state;
-    private String id; // opcional, para debug o lógica
+    private String id;
 
     public TrafficLight(double x, double y, double angle, String id) {
         double boxWidth = 16, boxHeight = 40, radius = 6;
@@ -25,7 +22,6 @@ public class TrafficLight {
         fondo.setArcHeight(10);
         fondo.setFill(Color.BLACK);
 
-        // Vertical por defecto: rojo-arriba, amarillo-centro, verde-abajo
         redLight = new Circle(0, -boxHeight / 2 + radius + 4, radius, Color.RED);
         yellowLight = new Circle(0, 0, radius, Color.web("#333300"));
         greenLight = new Circle(0, boxHeight / 2 - radius - 4, radius, Color.web("#003300"));

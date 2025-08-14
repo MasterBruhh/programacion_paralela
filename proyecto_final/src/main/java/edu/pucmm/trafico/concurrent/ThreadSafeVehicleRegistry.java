@@ -1,10 +1,12 @@
 package edu.pucmm.trafico.concurrent;
 
-import edu.pucmm.trafico.model.Vehicle;
+import edu.pucmm.trafico.model.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.Collection;
 import java.util.Queue;
+import java.util.List;
+import java.util.ArrayList;
 
 public class ThreadSafeVehicleRegistry {
     private final ConcurrentHashMap<Long, Vehicle> activeVehicles;
@@ -18,18 +20,30 @@ public class ThreadSafeVehicleRegistry {
         laneQueues.put("SOUTH", new ConcurrentLinkedQueue<>());
         laneQueues.put("EAST", new ConcurrentLinkedQueue<>());
         laneQueues.put("WEST", new ConcurrentLinkedQueue<>());
+        
+        for (HighwayLane lane : HighwayLane.values()) {
+            laneQueues.put(lane.name(), new ConcurrentLinkedQueue<>());
+        }
     }
     
     public void registerVehicle(Vehicle vehicle) {
         activeVehicles.put(vehicle.getId(), vehicle);
-        String lane = vehicle.getStartPoint().name();
-        laneQueues.get(lane).offer(vehicle);
+        
+        if (vehicle.isHighwayVehicle()) {
+            laneQueues.get(vehicle.getHighwayLane().name()).offer(vehicle);
+        } else {
+            laneQueues.get(vehicle.getStartPoint().name()).offer(vehicle);
+        }
     }
     
     public void unregisterVehicle(Vehicle vehicle) {
         activeVehicles.remove(vehicle.getId());
-        String lane = vehicle.getStartPoint().name();
-        laneQueues.get(lane).remove(vehicle);
+        
+        if (vehicle.isHighwayVehicle()) {
+            laneQueues.get(vehicle.getHighwayLane().name()).remove(vehicle);
+        } else {
+            laneQueues.get(vehicle.getStartPoint().name()).remove(vehicle);
+        }
     }
     
     public Vehicle getVehicle(long id) {
@@ -40,13 +54,17 @@ public class ThreadSafeVehicleRegistry {
         return activeVehicles.values();
     }
     
-    public Queue<Vehicle> getLaneQueue(String lane) {
-        return laneQueues.get(lane);
+    public List<Vehicle> getEmergencyVehicles() {
+        List<Vehicle> emergencyVehicles = new ArrayList<>();
+        for (Vehicle vehicle : activeVehicles.values()) {
+            if (vehicle.getType() == VehicleType.EMERGENCY) {
+                emergencyVehicles.add(vehicle);
+            }
+        }
+        return emergencyVehicles;
     }
     
-    public boolean isFirstInLane(Vehicle vehicle) {
-        String lane = vehicle.getStartPoint().name();
-        Queue<Vehicle> queue = laneQueues.get(lane);
-        return queue.peek() == vehicle;
+    public int getActiveVehicleCount() {
+        return activeVehicles.size();
     }
 }

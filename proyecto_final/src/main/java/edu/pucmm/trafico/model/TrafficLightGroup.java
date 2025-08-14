@@ -11,11 +11,13 @@ public class TrafficLightGroup {
     public TrafficLightGroup(String groupName) {
         this.groupName = groupName;
     }
-    
+
     public void setState(TrafficLightState state) {
         this.state = state;
+        for (TrafficLight trafficLight : trafficLights) {
+            trafficLight.setState(state);
+        }
     }
-    
     public TrafficLightState getState() {
         return state;
     }

@@ -20,18 +20,20 @@ public class HighwayLaneManager {
         }
     }
     
-    public HighwayLane assignLane(Direction direction, boolean goingNorth) {
-        if (goingNorth) {
+    public HighwayLane assignLane(Direction direction, boolean goingWest) {
+        if (goingWest) {
+            // Avenida Superior (va hacia la izquierda/oeste)
             return switch (direction) {
-                case LEFT, U_TURN -> HighwayLane.NORTH_LEFT;
-                case RIGHT -> HighwayLane.NORTH_RIGHT;
-                default -> HighwayLane.NORTH_CENTER;
+                case LEFT, U_TURN -> HighwayLane.WEST_LEFT;
+                case RIGHT -> HighwayLane.WEST_RIGHT;
+                default -> HighwayLane.WEST_CENTER;
             };
         } else {
+            // Avenida Inferior (va hacia la derecha/este)
             return switch (direction) {
-                case LEFT, U_TURN -> HighwayLane.SOUTH_LEFT;
-                case RIGHT -> HighwayLane.SOUTH_RIGHT;
-                default -> HighwayLane.SOUTH_CENTER;
+                case LEFT, U_TURN -> HighwayLane.EAST_LEFT;
+                case RIGHT -> HighwayLane.EAST_RIGHT;
+                default -> HighwayLane.EAST_CENTER;
             };
         }
     }

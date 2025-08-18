@@ -24,6 +24,8 @@
                     <items>
                         <MenuItem id="Normal" mnemonicParsing="false" onAction="#handleConfiguracion" text="Normal"/>
                         <MenuItem id="Emergencia" mnemonicParsing="false" onAction="#handleConfiguracion" text="Emergencia"/>
+                        <MenuItem id="Transporte_Publico" mnemonicParsing="false" onAction="#handleConfiguracion" text="Transporte Público"/>
+                        <MenuItem id="Pesado" mnemonicParsing="false" onAction="#handleConfiguracion" text="Pesado"/>
                     </items>
                 </Menu>
                 <Menu mnemonicParsing="false" text="Dirección en Cruce">

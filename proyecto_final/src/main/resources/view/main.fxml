@@ -14,26 +14,30 @@
             <menus>
                 <Menu mnemonicParsing="false" text="Punto de Salida">
                     <items>
-                        <MenuItem id="Arriba" mnemonicParsing="false" onAction="#handleConfiguracion" text="Arriba"/>
-                        <MenuItem id="Abajo" mnemonicParsing="false" onAction="#handleConfiguracion" text="Abajo"/>
+                        <!-- Calles verticales: norte (izquierda/derecha) y sur (izquierda/derecha) -->
+                        <MenuItem id="Arriba Izquierda" mnemonicParsing="false" onAction="#handleConfiguracion" text="Arriba Izquierda"/>
+                        <MenuItem id="Arriba Derecha"  mnemonicParsing="false" onAction="#handleConfiguracion" text="Arriba Derecha"/>
+                        <MenuItem id="Abajo Izquierda" mnemonicParsing="false" onAction="#handleConfiguracion" text="Abajo Izquierda"/>
+                        <MenuItem id="Abajo Derecha"   mnemonicParsing="false" onAction="#handleConfiguracion" text="Abajo Derecha"/>
+                        <!-- Entradas de autopista (oeste/este) -->
                         <MenuItem id="Izquierda" mnemonicParsing="false" onAction="#handleConfiguracion" text="Izquierda"/>
-                        <MenuItem id="Derecha" mnemonicParsing="false" onAction="#handleConfiguracion" text="Derecha"/>
+                        <MenuItem id="Derecha"   mnemonicParsing="false" onAction="#handleConfiguracion" text="Derecha"/>
                     </items>
                 </Menu>
                 <Menu mnemonicParsing="false" text="Tipo de Vehículo">
                     <items>
-                        <MenuItem id="Normal" mnemonicParsing="false" onAction="#handleConfiguracion" text="Normal"/>
-                        <MenuItem id="Emergencia" mnemonicParsing="false" onAction="#handleConfiguracion" text="Emergencia"/>
-                        <MenuItem id="Transporte_Publico" mnemonicParsing="false" onAction="#handleConfiguracion" text="Transporte Público"/>
-                        <MenuItem id="Pesado" mnemonicParsing="false" onAction="#handleConfiguracion" text="Pesado"/>
+                        <MenuItem id="Normal"              mnemonicParsing="false" onAction="#handleConfiguracion" text="Normal"/>
+                        <MenuItem id="Emergencia"          mnemonicParsing="false" onAction="#handleConfiguracion" text="Emergencia"/>
+                        <MenuItem id="Transporte_Publico"  mnemonicParsing="false" onAction="#handleConfiguracion" text="Transporte Público"/>
+                        <MenuItem id="Pesado"              mnemonicParsing="false" onAction="#handleConfiguracion" text="Pesado"/>
                     </items>
                 </Menu>
                 <Menu mnemonicParsing="false" text="Dirección en Cruce">
                     <items>
-                        <MenuItem id="Recto" mnemonicParsing="false" onAction="#handleConfiguracion" text="Recto"/>
-                        <MenuItem id="VIzquierda" mnemonicParsing="false" onAction="#handleConfiguracion" text="Izquierda"/>
-                        <MenuItem id="VDerecha" mnemonicParsing="false" onAction="#handleConfiguracion" text="Derecha"/>
-                        <MenuItem id="U" mnemonicParsing="false" onAction="#handleConfiguracion" text="En U"/>
+                        <MenuItem id="Recto"       mnemonicParsing="false" onAction="#handleConfiguracion" text="Recto"/>
+                        <MenuItem id="VIzquierda"  mnemonicParsing="false" onAction="#handleConfiguracion" text="Izquierda"/>
+                        <MenuItem id="VDerecha"    mnemonicParsing="false" onAction="#handleConfiguracion" text="Derecha"/>
+                        <MenuItem id="U"           mnemonicParsing="false" onAction="#handleConfiguracion" text="En U"/>
                     </items>
                 </Menu>
                 <Menu mnemonicParsing="false" text="Acción">

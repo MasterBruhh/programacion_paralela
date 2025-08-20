@@ -16,14 +16,14 @@ import java.util.logging.Logger;
  */
 public class VehicleLifecycleManager {
     private static final Logger logger = Logger.getLogger(VehicleLifecycleManager.class.getName());
-    
+
     private final ExecutorService executorService;
     private final ThreadSafeVehicleRegistry registry;
     private final IntersectionSemaphore intersectionSemaphore;
     private final ConcurrentHashMap<Long, Future<?>> vehicleTasks;
     private final ConcurrentHashMap<Long, Circle> vehicleNodes;
     private final Map<String, TrafficLightGroup> trafficLightGroups;
-    
+
     public VehicleLifecycleManager(Map<String, TrafficLightGroup> trafficLightGroups) {
         // Pool de threads para manejar vehículos concurrentemente
         final java.util.concurrent.atomic.AtomicInteger threadCount = new java.util.concurrent.atomic.AtomicInteger(1);
@@ -33,16 +33,16 @@ public class VehicleLifecycleManager {
             t.setDaemon(true);
             return t;
         });
-        
-    this.registry = new ThreadSafeVehicleRegistry();
-    this.intersectionSemaphore = new IntersectionSemaphore();
+
+        this.registry = new ThreadSafeVehicleRegistry();
+        this.intersectionSemaphore = new IntersectionSemaphore();
         this.vehicleTasks = new ConcurrentHashMap<>();
         this.vehicleNodes = new ConcurrentHashMap<>();
         this.trafficLightGroups = trafficLightGroups;
-        
+
         logger.info("VehicleLifecycleManager inicializado");
     }
-    
+
     /**
      * Agrega un vehículo al sistema y lanza su tarea de movimiento
      */
@@ -50,62 +50,59 @@ public class VehicleLifecycleManager {
         // Registrar vehículo
         registry.registerVehicle(vehicle);
         vehicleNodes.put(vehicle.getId(), visualNode);
-        
+
         // Log de registro
         logger.info(String.format("Registrando vehículo #%d [%s] en %s",
                 vehicle.getId(),
                 vehicle.getType(),
-                vehicle.isHighwayVehicle() ? 
-                    "Autopista - " + vehicle.getHighwayLane().getDescription() :
-                    "Calle - " + vehicle.getStartPoint().getDescription()
+                vehicle.isHighwayVehicle() ?
+                        "Autopista - " + vehicle.getHighwayLane().getDescription() :
+                        "Calle - " + vehicle.getStartPoint().getDescription()
         ));
-        
+
         // Crear y lanzar tarea de movimiento
         VehicleTask task = new VehicleTask(vehicle, this);
         Future<?> future = executorService.submit(task);
         vehicleTasks.put(vehicle.getId(), future);
-        
+
         logger.info("Tarea de movimiento lanzada para vehículo " + vehicle.getId());
     }
-    
+
     /**
      * Obtiene el nodo visual de un vehículo
      */
     public Circle getVehicleNode(long vehicleId) {
         return vehicleNodes.get(vehicleId);
     }
-    
+
     /**
-     * Obtiene todos los vehículos activos (placeholder para colisiones futuras)
+     * Obtiene todos los vehículos activos (snapshot no bloqueante)
      */
     public java.util.Collection<Vehicle> getAllActiveVehicles() {
-        return registry.getAllVehicles();
+        return registry.snapshotAll();
     }
-    
+
     /**
-     * Placeholder para obtener estado de semáforo (implementar en fase posterior)
+     * Estado actual del semáforo de un grupo
      */
     public TrafficLightState getTrafficLightState(String groupName) {
         TrafficLightGroup group = trafficLightGroups.get(groupName);
         return group != null ? group.getState() : TrafficLightState.RED;
     }
-    
+
     /**
-     * Placeholder para semáforo de intersección (implementar en fase posterior)
+     * Semáforo de intersección
      */
     public IntersectionSemaphore getIntersectionSemaphore() { return intersectionSemaphore; }
-    
-    /**
-     * Placeholder para protocolo de emergencia (implementar en fase posterior)
-     */
+
     public void activateEmergencyProtocol(String groupName) {
         logger.info("Protocolo de emergencia será implementado en fase posterior");
     }
-    
+
     public void deactivateEmergencyProtocol() {
         logger.info("Desactivación de protocolo de emergencia será implementada en fase posterior");
     }
-    
+
     /**
      * Elimina el vehículo de la escena con animación y limpia recursos
      */
@@ -114,10 +111,10 @@ public class VehicleLifecycleManager {
         if (task != null) {
             task.cancel(true);
         }
-        
+
         registry.unregisterVehicle(vehicle);
         vehicle.deactivate();
-        
+
         Platform.runLater(() -> {
             Circle node = vehicleNodes.remove(vehicle.getId());
             if (node != null && node.getParent() != null) {
@@ -125,16 +122,16 @@ public class VehicleLifecycleManager {
             }
         });
     }
-    
+
     private void performExitAnimation(Circle node) {
         FadeTransition fade = new FadeTransition(Duration.seconds(1.0), node);
         fade.setFromValue(1.0);
         fade.setToValue(0.0);
-        
+
         ScaleTransition scale = new ScaleTransition(Duration.seconds(1.0), node);
         scale.setToX(0.2);
         scale.setToY(0.2);
-        
+
         ParallelTransition exit = new ParallelTransition(fade, scale);
         exit.setOnFinished(e -> {
             if (node.getParent() != null) {
@@ -143,16 +140,16 @@ public class VehicleLifecycleManager {
         });
         exit.play();
     }
-    
+
     /**
      * Detiene todas las tareas y libera recursos
      */
     public void shutdown() {
         logger.info("Deteniendo todas las tareas de vehículos...");
-        
+
         // Cancelar todas las tareas
         vehicleTasks.values().forEach(task -> task.cancel(true));
-        
+
         // Detener el executor
         executorService.shutdown();
         try {
@@ -163,17 +160,23 @@ public class VehicleLifecycleManager {
             executorService.shutdownNow();
             Thread.currentThread().interrupt();
         }
-        
+
         logger.info("VehicleLifecycleManager detenido");
     }
-    
+
     /**
      * Obtiene estadísticas básicas del sistema
      */
     public String getSystemStats() {
-        int totalVehicles = registry.getActiveVehicleCount();
-        int emergencyVehicles = registry.getEmergencyVehicles().size();
-        
+        java.util.Collection<Vehicle> active = registry.snapshotAll();
+        int totalVehicles = active.size();
+        int emergencyVehicles = 0;
+        for (Vehicle v : active) {
+            if (v.getType() == VehicleType.EMERGENCY) {
+                emergencyVehicles++;
+            }
+        }
+
         return String.format("Vehículos activos: %d (Emergencias: %d)",
                 totalVehicles, emergencyVehicles);
     }

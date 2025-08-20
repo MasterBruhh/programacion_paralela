@@ -50,7 +50,7 @@ public class IntersectionController {
     private final PriorityBlockingQueue<VehicleInfo> globalQueue;
     private final Semaphore intersectionSemaphore = new Semaphore(1, true);
     private final AtomicReference<CrossingMode> currentMode = new AtomicReference<>(CrossingMode.FIFO);
-    private final AtomicReference<StartPoint> currentRotationLane = new AtomicReference<>(StartPoint.NORTH);
+    private final AtomicReference<StartPoint> currentRotationLane = new AtomicReference<>(StartPoint.NORTH_L);
     private final AtomicInteger congestedLanes = new AtomicInteger(0);
     private final Object turnLock = new Object();
     
@@ -64,7 +64,7 @@ public class IntersectionController {
     
     // Orden de rotación
     private static final StartPoint[] ROTATION_ORDER = {
-        StartPoint.NORTH, StartPoint.WEST, StartPoint.SOUTH, StartPoint.EAST
+        StartPoint.NORTH_L, StartPoint.WEST, StartPoint.SOUTH_L,StartPoint.SOUTH_D, StartPoint.EAST, StartPoint.NORTH_D
     };
     
     public IntersectionController() {

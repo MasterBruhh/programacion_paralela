@@ -7,22 +7,22 @@ package edu.pucmm.trafico.model;
 public enum HighwayLane {
     // Avenida Superior (Y=210 a Y=310, va hacia la izquierda/oeste)
     // Dividimos 100px entre 3 carriles = ~33.33px por carril
-    WEST_LEFT(1160, 226.67, "Oeste-Izquierdo", 1, true),     // Y=210 + 16.67
-    WEST_CENTER(1160, 260, "Oeste-Centro", 2, true),         // Y=210 + 50 (centro)
-    WEST_RIGHT(1160, 293.33, "Oeste-Derecho", 3, true),      // Y=210 + 83.33
-    
+    EAST_RIGHT(1160, 226.67, "Oeste-Izquierdo", 1, true),     // Y=210 + 16.67
+    EAST_CENTER(1160, 260, "Oeste-Centro", 2, true),         // Y=210 + 50 (centro)
+    EAST_LEFT(1160, 293.33, "Oeste-Derecho", 3, true),      // Y=210 + 83.33
+
     // Avenida Inferior (Y=310 a Y=410, va hacia la derecha/este)
-    EAST_LEFT(0, 326.67, "Este-Izquierdo", 1, false),        // Y=310 + 16.67
-    EAST_CENTER(0, 360, "Este-Centro", 2, false),            // Y=310 + 50 (centro)
-    EAST_RIGHT(0, 393.33, "Este-Derecho", 3, false);         // Y=310 + 83.33
-    
+    WEST_LEFT(0, 326.67, "Este-Izquierdo", 1, false),        // Y=310 + 16.67
+    WEST_CENTER(0, 360, "Este-Centro", 2, false),            // Y=310 + 50 (centro)
+    WEST_RIGHT(0, 393.33, "Este-Derecho", 3, false);         // Y=310 + 83.33
+
     private final double startX;
     private final double startY;
     private final String description;
     private final int laneNumber;
     private final boolean westbound; // true=hacia oeste (izquierda), false=hacia este (derecha)
-    
-    HighwayLane(double startX, double startY, String description, 
+
+    HighwayLane(double startX, double startY, String description,
                 int laneNumber, boolean westbound) {
         this.startX = startX;
         this.startY = startY;
@@ -30,93 +30,101 @@ public enum HighwayLane {
         this.laneNumber = laneNumber;
         this.westbound = westbound;
     }
-    
+    public enum HighwayLaneTurn {
+        FIRSTLEFT, SECONDLEFT, FIRSRIGHT,SECONDRIGHT, FIRST_U_TURN,SECOND_U_TURN
+    }
+
     /**
      * Obtiene la posición X inicial del carril
      */
-    public double getStartX() { 
-        return startX; 
+    public double getStartX() {
+        return startX;
     }
-    
+
     /**
      * Obtiene la posición Y inicial del carril (centro del carril)
      */
-    public double getStartY() { 
-        return startY; 
+    public double getStartY() {
+        return startY;
     }
-    
+
     /**
      * Obtiene la descripción del carril
      */
-    public String getDescription() { 
-        return description; 
+    public String getDescription() {
+        return description;
     }
-    
+
     /**
      * Obtiene el número de carril (1=izquierdo, 2=centro, 3=derecho)
      */
-    public int getLaneNumber() { 
-        return laneNumber; 
+    public int getLaneNumber() {
+        return laneNumber;
     }
-    
+
     /**
      * Verifica si es un carril hacia el oeste (izquierda)
      */
-    public boolean isWestbound() { 
-        return westbound; 
+    public boolean isWestbound() {
+        return westbound;
     }
-    
+
     /**
      * Verifica si es un carril hacia el este (derecha)
      */
-    public boolean isEastbound() { 
-        return !westbound; 
+    public boolean isEastbound() {
+        return !westbound;
     }
-    
+
     /**
      * Para compatibilidad con código existente - mapea oeste como "norte"
      */
     @Deprecated
-    public boolean isNorthbound() { 
-        return westbound; 
+    public boolean isNorthbound() {
+        return westbound;
     }
-    
+
     /**
      * Verifica si es el carril izquierdo (solo para giros a la izquierda y vuelta en U)
      */
-    public boolean isLeftLane() { 
-        return laneNumber == 1; 
+    public boolean isLeftLane() {
+        return laneNumber == 1;
     }
-    
+
     /**
      * Verifica si es el carril central
      */
-    public boolean isCenterLane() { 
-        return laneNumber == 2; 
+    public boolean isCenterLane() {
+        return laneNumber == 2;
     }
-    
+
     /**
      * Verifica si es el carril derecho
      */
-    public boolean isRightLane() { 
-        return laneNumber == 3; 
+    public boolean isRightLane() {
+        return laneNumber == 3;
     }
-    
+
     /**
      * Obtiene un carril aleatorio para una dirección específica
      * Respeta las reglas del carril izquierdo para giros
      */
     public static HighwayLane getRandomLane(boolean goingWest, Direction direction) {
         java.util.Random random = new java.util.Random();
-        
-        // Si es giro a la izquierda o vuelta en U, debe ir por el carril izquierdo
+
+        // LEFT o U_TURN: carril izquierdo
         if (direction == Direction.LEFT || direction == Direction.U_TURN) {
             return goingWest ? WEST_LEFT : EAST_LEFT;
         }
-        
-        // Para otras direcciones, puede usar cualquier carril
+
+        // RIGHT: carril derecho
+        if (direction == Direction.RIGHT) {
+            return goingWest ? WEST_RIGHT : EAST_RIGHT;
+        }
+
+        // STRAIGHT u otros: cualquier carril
         int laneNumber = random.nextInt(3) + 1;
-        
+
         if (goingWest) {
             return switch (laneNumber) {
                 case 1 -> WEST_LEFT;
@@ -133,7 +141,7 @@ public enum HighwayLane {
             };
         }
     }
-    
+
     /**
      * Obtiene la posición de parada antes de una intersección
      * @param intersectionIndex índice de la intersección (0-3)
@@ -142,23 +150,23 @@ public enum HighwayLane {
     public double[] getStopPosition(int intersectionIndex) {
         // Las intersecciones están en X=70, 390, 690, 1010
         double[] intersectionXs = {70, 390, 690, 1010};
-        
+
         if (intersectionIndex < 0 || intersectionIndex > 3) {
             return new double[]{startX, startY};
         }
-        
+
         double x = intersectionXs[intersectionIndex];
-        
+
         // Ajustar posición de parada según dirección
         if (isWestbound()) {
             x += 90; // Parar 10px después del inicio de la intersección
         } else {
             x -= 10; // Parar 10px antes de la intersección
         }
-        
+
         return new double[]{x, startY};
     }
-    
+
     /**
      * Obtiene el carril correspondiente después de un cambio
      * @param targetLaneNumber número del carril destino
@@ -168,7 +176,7 @@ public enum HighwayLane {
         if (targetLaneNumber < 1 || targetLaneNumber > 3) {
             return null;
         }
-        
+
         String prefix = westbound ? "WEST_" : "EAST_";
         String suffix = switch (targetLaneNumber) {
             case 1 -> "LEFT";
@@ -176,14 +184,14 @@ public enum HighwayLane {
             case 3 -> "RIGHT";
             default -> "";
         };
-        
+
         try {
             return HighwayLane.valueOf(prefix + suffix);
         } catch (IllegalArgumentException e) {
             return null;
         }
     }
-    
+
     /**
      * Calcula la distancia Y para un cambio de carril
      * @param targetLaneNumber número del carril destino

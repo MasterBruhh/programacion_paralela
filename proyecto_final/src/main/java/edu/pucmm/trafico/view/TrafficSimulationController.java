@@ -11,12 +11,10 @@ import javafx.scene.paint.Color;
 import javafx.scene.shape.*;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
-import javafx.scene.transform.Rotate;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.List;
 import java.util.Random;
-import java.util.concurrent.ThreadLocalRandom;
 
 public class TrafficSimulationController {
 
@@ -24,29 +22,30 @@ public class TrafficSimulationController {
     private Pane lienzo;
 
     private SimulationEngine simulationEngine;
-    private StartPoint selectedStartPoint = StartPoint.NORTH;
+    // Usar un carril por defecto válido del norte
+    private StartPoint selectedStartPoint = StartPoint.NORTH_L;
     private VehicleType selectedVehicleType = VehicleType.NORMAL;
     private Direction selectedDirection = Direction.STRAIGHT;
     private Label configLabel;
 
-    private TrafficLightGroup CalleIzqGroup = new TrafficLightGroup("CalleIzq");
-    private TrafficLightGroup CalleDerGroup = new TrafficLightGroup("CalleDer");
-    private TrafficLightGroup arribaGroup = new TrafficLightGroup("ARRIBA");
-    private TrafficLightGroup abajoGroup = new TrafficLightGroup("ABAJO");
+    private final TrafficLightGroup CalleIzqGroup = new TrafficLightGroup("CalleIzq");
+    private final TrafficLightGroup CalleDerGroup = new TrafficLightGroup("CalleDer");
+    private final TrafficLightGroup arribaGroup = new TrafficLightGroup("ARRIBA");
+    private final TrafficLightGroup abajoGroup = new TrafficLightGroup("ABAJO");
     private TrafficLightController lightController;
-    
+
     private Map<String, TrafficLightGroup> trafficLightGroups;
 
     @FXML
     public void initialize() {
         drawRoadsWithLanes();
-        
+
         trafficLightGroups = new HashMap<>();
         trafficLightGroups.put("CalleIzq", CalleIzqGroup);
         trafficLightGroups.put("CalleDer", CalleDerGroup);
         trafficLightGroups.put("ARRIBA", arribaGroup);
         trafficLightGroups.put("ABAJO", abajoGroup);
-        
+
         simulationEngine = new SimulationEngine(lienzo, trafficLightGroups);
         createConfigDisplay();
 
@@ -76,18 +75,25 @@ public class TrafficSimulationController {
         String option = ((MenuItem) event.getSource()).getId();
 
         switch (option) {
-            case "Arriba" -> selectedStartPoint = StartPoint.NORTH;
-            case "Abajo" -> selectedStartPoint = StartPoint.SOUTH;
-            case "Izquierda" -> selectedStartPoint = StartPoint.WEST;
-            case "Derecha" -> selectedStartPoint = StartPoint.EAST;
-            case "Normal" -> selectedVehicleType = VehicleType.NORMAL;
-            case "Emergencia" -> selectedVehicleType = VehicleType.EMERGENCY;
+            // Calles verticales: mapear explícitamente a L/D
+            case "Arriba Izquierda" -> selectedStartPoint = StartPoint.NORTH_L;
+            case "Arriba Derecha"  -> selectedStartPoint = StartPoint.NORTH_D;
+            case "Abajo Izquierda" -> selectedStartPoint = StartPoint.SOUTH_L;
+            case "Abajo Derecha"   -> selectedStartPoint = StartPoint.SOUTH_D;
+            // Entradas de autopista
+            case "Izquierda"       -> selectedStartPoint = StartPoint.WEST;
+            case "Derecha"         -> selectedStartPoint = StartPoint.EAST;
+            // Tipo de vehículo
+            case "Normal"          -> selectedVehicleType = VehicleType.NORMAL;
+            case "Emergencia"      -> selectedVehicleType = VehicleType.EMERGENCY;
             case "Transporte_Publico" -> selectedVehicleType = VehicleType.PUBLIC_TRANSPORT;
-            case "Pesado" -> selectedVehicleType = VehicleType.HEAVY;
-            case "Recto" -> selectedDirection = Direction.STRAIGHT;
-            case "VIzquierda" -> selectedDirection = Direction.LEFT;
-            case "VDerecha" -> selectedDirection = Direction.RIGHT;
-            case "U" -> selectedDirection = Direction.U_TURN;
+            case "Pesado"          -> selectedVehicleType = VehicleType.HEAVY;
+            // Dirección
+            case "Recto"           -> selectedDirection = Direction.STRAIGHT;
+            case "VIzquierda"      -> selectedDirection = Direction.LEFT;
+            case "VDerecha"        -> selectedDirection = Direction.RIGHT;
+            case "U"               -> selectedDirection = Direction.U_TURN;
+            default -> { /* ignorar */ }
         }
 
         configLabel.setText(getConfigText());
@@ -96,20 +102,20 @@ public class TrafficSimulationController {
     @FXML
     public void crearVehiculo() {
         Vehicle vehicle;
-        
-        // Si se seleccionó Este u Oeste, crear vehículo de autopista
+
+        // Autopista si es Este u Oeste
         if (selectedStartPoint == StartPoint.EAST || selectedStartPoint == StartPoint.WEST) {
             boolean goingWest = (selectedStartPoint == StartPoint.WEST);
             HighwayLane lane = HighwayLane.getRandomLane(goingWest, selectedDirection);
-            
+
             vehicle = new Vehicle(selectedVehicleType, lane, selectedDirection);
-            // Asignar salida aleatoria para vehículos de autopista
-            vehicle.setTargetExit(new Random().nextInt(4)); // 0-3 para las 4 intersecciones
+            // Salida aleatoria para autopista
+            vehicle.setTargetExit(new Random().nextInt(4));
         } else {
-            // Crear vehículo de calle normal
+            // Calles verticales: NORTH_L/NORTH_D/SOUTH_L/SOUTH_D
             vehicle = new Vehicle(selectedVehicleType, selectedStartPoint, selectedDirection);
         }
-        
+
         simulationEngine.addVehicle(vehicle);
 
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
@@ -117,11 +123,7 @@ public class TrafficSimulationController {
         alert.setHeaderText("Vehículo #" + vehicle.getId() + " creado exitosamente");
 
         String content = String.format(
-                "Tipo: %s\n" +
-                "Punto de salida: %s\n" +
-                "Dirección: %s\n" +
-                "Posición inicial: (%.0f, %.0f)\n" +
-                "Es vehículo de autopista: %s",
+                "Tipo: %s%nPunto de salida: %s%nDirección: %s%nPosición inicial: (%.0f, %.0f)%nEs vehículo de autopista: %s",
                 selectedVehicleType,
                 selectedStartPoint,
                 selectedDirection,
@@ -146,29 +148,29 @@ public class TrafficSimulationController {
         int calle = 0;
 
         for (int i = 0; i < cantidad; i++) {
-            // 70% probabilidad de crear vehículo de autopista
             if (rnd.nextDouble() < 0.7) {
-                // Crear vehículo de autopista
+                // Autopista
                 boolean goingWest = rnd.nextBoolean();
                 Direction dir = pickRandomDirection(rnd);
                 VehicleType tipo = pickVehicleType(rnd);
-                
-                // Obtener carril aleatorio respetando las reglas
+
                 HighwayLane lane = HighwayLane.getRandomLane(goingWest, dir);
-                
+
                 Vehicle v = new Vehicle(tipo, lane, dir);
-                v.setTargetExit(rnd.nextInt(4)); // Salida aleatoria 0-3
+                v.setTargetExit(rnd.nextInt(4));
                 simulationEngine.addVehicle(v);
-                
+
                 autopista++;
                 resumen.append(String.format("#%d -> AUTOPISTA | %s | Carril %s | Dir: %s | Salida: %d%n",
-                        v.getId(), tipo.getDescription(), lane.getDescription(), 
+                        v.getId(), tipo.getDescription(), lane.getDescription(),
                         dir.getDescription(), v.getTargetExit()));
             } else {
-                // Crear vehículo de calle
+                // Calle: elegir entre L/D de norte o sur
                 VehicleType tipo = pickVehicleType(rnd);
-                // Solo Norte o Sur para calles verticales
-                StartPoint inicio = rnd.nextBoolean() ? StartPoint.NORTH : StartPoint.SOUTH;
+                boolean north = rnd.nextBoolean();
+                StartPoint inicio = north
+                        ? (rnd.nextBoolean() ? StartPoint.NORTH_L : StartPoint.NORTH_D)
+                        : (rnd.nextBoolean() ? StartPoint.SOUTH_L : StartPoint.SOUTH_D);
                 Direction direccion = pickRandomDirection(rnd);
 
                 Vehicle v = new Vehicle(tipo, inicio, direccion);
@@ -176,9 +178,15 @@ public class TrafficSimulationController {
 
                 calle++;
                 resumen.append(String.format("#%d -> CALLE | %s | Desde %s | Dir: %s%n",
-                        v.getId(), tipo.getDescription(), inicio.getDescription(), 
+                        v.getId(), tipo.getDescription(), inicio.getDescription(),
                         direccion.getDescription()));
             }
+            try {
+                Thread.sleep(1000); // 1000 ms = 1 segundo
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+
         }
 
         resumen.append(String.format("\nTotal: %d de autopista, %d de calle", autopista, calle));
@@ -192,32 +200,18 @@ public class TrafficSimulationController {
 
     private VehicleType pickVehicleType(Random rnd) {
         double p = rnd.nextDouble();
-        
-        // Distribución realista de tipos de vehículos
-        if (p < 0.05) {
-            return VehicleType.EMERGENCY;       // 5% emergencia
-        } else if (p < 0.15) {
-            return VehicleType.PUBLIC_TRANSPORT; // 10% transporte público
-        } else if (p < 0.25) {
-            return VehicleType.HEAVY;           // 10% pesados
-        } else {
-            return VehicleType.NORMAL;          // 75% normales
-        }
+        if (p < 0.05) return VehicleType.EMERGENCY;
+        else if (p < 0.15) return VehicleType.PUBLIC_TRANSPORT;
+        else if (p < 0.25) return VehicleType.HEAVY;
+        else return VehicleType.NORMAL;
     }
 
     private Direction pickRandomDirection(Random rnd) {
         double p = rnd.nextDouble();
-        
-        // Distribución realista de direcciones
-        if (p < 0.60) {
-            return Direction.STRAIGHT;  // 60% continúan recto
-        } else if (p < 0.80) {
-            return Direction.RIGHT;     // 20% giran a la derecha
-        } else if (p < 0.95) {
-            return Direction.LEFT;      // 15% giran a la izquierda
-        } else {
-            return Direction.U_TURN;    // 5% vuelta en U
-        }
+        if (p < 0.60) return Direction.STRAIGHT;
+        else if (p < 0.80) return Direction.RIGHT;
+        else if (p < 0.95) return Direction.LEFT;
+        else return Direction.U_TURN;
     }
 
     @FXML
@@ -319,22 +313,16 @@ public class TrafficSimulationController {
         avenida2.setLayoutY(avenueY2 + avenueWidth + 7);
 
         lienzo.getChildren().addAll(avenida1, avenida2);
-        
-        // Dibujar indicadores de posición de carriles para debug
+
+        // Indicadores de carriles de autopista para debug
         drawLaneIndicators();
     }
-    
-    /**
-     * Dibuja pequeños indicadores para mostrar la posición exacta de cada carril
-     */
+
     private void drawLaneIndicators() {
-        // Indicadores para avenida superior
         for (HighwayLane lane : new HighwayLane[]{HighwayLane.WEST_LEFT, HighwayLane.WEST_CENTER, HighwayLane.WEST_RIGHT}) {
             Circle indicator = new Circle(50, lane.getStartY(), 3, Color.YELLOW);
             lienzo.getChildren().add(indicator);
         }
-        
-        // Indicadores para avenida inferior
         for (HighwayLane lane : new HighwayLane[]{HighwayLane.EAST_LEFT, HighwayLane.EAST_CENTER, HighwayLane.EAST_RIGHT}) {
             Circle indicator = new Circle(1110, lane.getStartY(), 3, Color.YELLOW);
             lienzo.getChildren().add(indicator);
@@ -351,8 +339,8 @@ public class TrafficSimulationController {
 
         double[][] exclusionRanges = new double[2][2];
         for (int i = 1; i <= 2; i++) {
-            exclusionRanges[i-1][0] = verticalXs[i];
-            exclusionRanges[i-1][1] = verticalXs[i] + streetWidth;
+            exclusionRanges[i - 1][0] = verticalXs[i];
+            exclusionRanges[i - 1][1] = verticalXs[i] + streetWidth;
         }
         double[] ranges = new double[]{
                 x, exclusionRanges[0][0],
@@ -393,7 +381,7 @@ public class TrafficSimulationController {
         };
         for (int i = 0; i < ranges.length; i += 2) {
             double segStart = ranges[i];
-            double segEnd = ranges[i+1];
+            double segEnd = ranges[i + 1];
             if (segEnd > segStart) {
                 Line line = new Line(segStart, y, segEnd, y);
                 line.setStroke(color);

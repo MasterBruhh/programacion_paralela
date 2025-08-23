@@ -41,6 +41,8 @@ public class Vehicle {
     // Visual
     private final Color color;
     private final double size;
+
+    private volatile int targetIntersection = -1; // -1 significa que no girará
     
     // Constructor para vehículos de calle
     public Vehicle(VehicleType type, StartPoint startPoint, Direction direction) {
@@ -278,7 +280,14 @@ public class Vehicle {
     public void setInIntersection(boolean inIntersection) { this.inIntersection = inIntersection; }
     public void setTargetExit(int targetExit) { this.targetExit = targetExit; }
     public void setEmergencyYielding(boolean yielding) { this.emergencyYielding = yielding; }
-    
+    // Y añadir estos métodos getter/setter
+    public int getTargetIntersection() {
+        return targetIntersection;
+    }
+
+    public void setTargetIntersection(int targetIntersection) {
+        this.targetIntersection = targetIntersection;
+    }
     @Override
     public String toString() {
         if (isHighwayVehicle) {

@@ -9,8 +9,10 @@ import javafx.scene.shape.LineTo;
 import javafx.scene.shape.MoveTo;
 import javafx.scene.shape.Path;
 import javafx.util.Duration;
-
+import javafx.scene.shape.CubicCurveTo;
+import javafx.scene.shape.Line;
 import java.util.Collection;
+import java.util.Random;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Logger;
@@ -26,6 +28,7 @@ public class VehicleTask implements Runnable {
         APPROACHING,
         WAITING_AT_LIGHT,
         CROSSING,
+        POST_TURN,  // Estado para movimiento post-giro
         EXITING
     }
 
@@ -33,11 +36,23 @@ public class VehicleTask implements Runnable {
     private static final double STREET_SPEED = 3.0;     // px/frame
     private static final double STOP_DISTANCE = 25.0;   // px - Reducido para detener más cerca
     private static final double HIGHWAY_INTERSECTION_BUFFER = 85.0; // px para que no paren en mitad de autopista
+    private static final int[] VALID_INTERSECTIONS = {390, 690}; // X-coordenadas de intersecciones válidas
+    private static final double POST_TURN_DISTANCE = 200.0; // Aumentado de 150 a 200 para mayor distancia después del giro
 
     private final Vehicle vehicle;
     private final VehicleLifecycleManager lifecycleManager;
     private final AtomicBoolean active;
     private final CollisionDetector collisionDetector;
+    private final Random random = new Random(); // Para movimientos aleatorios
+
+    // Variables para el control del movimiento post-giro
+    private volatile double postTurnTargetX;
+    private volatile double postTurnTargetY;
+    private volatile double postTurnSpeed = 3.0; // px/frame
+
+    // Contador para detectar cuando un vehículo está bloqueado
+    private int stuckCounter = 0;
+    private static final int MAX_STUCK_COUNT = 20;
 
     private volatile State currentState = State.SPAWNING;
     private volatile boolean isAnimating = false;
@@ -61,6 +76,7 @@ public class VehicleTask implements Runnable {
                     case APPROACHING -> handleApproaching();
                     case WAITING_AT_LIGHT -> handleWaitingAtLight();
                     case CROSSING -> { /* animación en hilo FX */ Thread.sleep(50); }
+                    case POST_TURN -> handlePostTurnMovement();
                     case EXITING -> { handleExit(); return; }
                     default -> Thread.sleep(50);
                 }
@@ -70,6 +86,53 @@ public class VehicleTask implements Runnable {
             Thread.currentThread().interrupt();
             logger.warning("Vehículo " + vehicle.getId() + " interrumpido");
         }
+    }
+
+    // Método para manejar el movimiento después del giro
+    private void handlePostTurnMovement() {
+        // Calcular dirección hacia el punto objetivo
+        double dx = postTurnTargetX - vehicle.getX();
+        double dy = postTurnTargetY - vehicle.getY();
+        double distance = Math.hypot(dx, dy);
+
+        // Si ya llegamos al punto objetivo, cambiar a EXITING
+        if (distance < 5.0) {
+            currentState = State.EXITING;
+            return;
+        }
+
+        // Mover hacia el punto objetivo
+        double step = Math.min(postTurnSpeed, distance);
+        double newX = vehicle.getX() + (dx / distance) * step;
+        double newY = vehicle.getY() + (dy / distance) * step;
+
+        // Verificar colisiones
+        Collection<Vehicle> allVehicles = lifecycleManager.getAllActiveVehicles();
+        if (!collisionDetector.canMove(vehicle, newX, newY, allVehicles)) {
+            stuckCounter++;
+
+            // Si estamos bloqueados por demasiado tiempo, aplicar un pequeño movimiento aleatorio
+            if (stuckCounter > MAX_STUCK_COUNT) {
+                double jitterX = (random.nextDouble() - 0.5) * 3.0;
+                double jitterY = (random.nextDouble() - 0.5) * 3.0;
+                updateVehiclePosition(vehicle.getX() + jitterX, vehicle.getY() + jitterY);
+                stuckCounter = 0;
+                return;
+            }
+
+            // Intentar con velocidad reducida
+            step *= 0.5;
+            newX = vehicle.getX() + (dx / distance) * step;
+            newY = vehicle.getY() + (dy / distance) * step;
+
+            if (!collisionDetector.canMove(vehicle, newX, newY, allVehicles)) {
+                // Si aún no podemos movernos, esperar
+                return;
+            }
+        }
+
+        stuckCounter = 0; // Resetear contador si nos movemos con éxito
+        updateVehiclePosition(newX, newY);
     }
 
     private void performSpawnAnimation() throws InterruptedException {
@@ -97,101 +160,6 @@ public class VehicleTask implements Runnable {
         }
     }
 
-    private void moveHighwayVehicle() {
-        double currentX = vehicle.getX();
-        double y = vehicle.getY();
-        boolean westbound = vehicle.getHighwayLane().isWestbound();
-        double newX = westbound ? currentX - HIGHWAY_SPEED : currentX + HIGHWAY_SPEED;
-
-        // Fin de autopista -> salir
-        if (newX < -20 || newX > 1180) {
-            currentState = State.EXITING;
-            return;
-        }
-
-        // Verificar colisiones
-        Collection<Vehicle> allVehicles = lifecycleManager.getAllActiveVehicles();
-        if (!collisionDetector.canMove(vehicle, newX, y, allVehicles)) {
-            // Si no podemos movernos por colisión, intentar con un movimiento más corto
-            double halfSpeed = HIGHWAY_SPEED * 0.5;
-            double saferX = westbound ? currentX - halfSpeed : currentX + halfSpeed;
-
-            if (collisionDetector.canMove(vehicle, saferX, y, allVehicles)) {
-                // Podemos movernos más lento
-                newX = saferX;
-            } else {
-                // Mejor quedarnos quietos
-                return;
-            }
-        }
-
-        // Detectar si hay un vehículo adelante y ajustar velocidad
-        CollisionDetector.VehicleAheadInfo ahead = collisionDetector.detectVehicleAhead(vehicle, allVehicles);
-        if (ahead != null && ahead.getDistance() < 80) {
-            // Reducir más la velocidad cuanto más cerca
-            double slowFactor = Math.max(0.3, ahead.getDistance() / 80.0);
-            newX = westbound ?
-                   currentX - (HIGHWAY_SPEED * slowFactor) :
-                   currentX + (HIGHWAY_SPEED * slowFactor);
-        }
-
-        // Intersecciones verticales en X: 70, 390, 690, 1010 (ancho calle 80)
-        int[] streets = {70, 390, 690, 1010};
-        String group = getTrafficLightGroup();
-        TrafficLightState light = lifecycleManager.getTrafficLightState(group);
-
-        // Si el vehículo ya ha cruzado la última intersección, no debería detenerse más
-        if (hasCrossedLastLight) {
-            updateVehiclePosition(newX, y);
-            return;
-        }
-
-        // Calcular borde de pare según dirección
-        for (int i = 0; i < streets.length; i++) {
-            int sx = streets[i];
-            double leftEdge = sx;
-            double rightEdge = sx + 80;
-            double stopX = westbound ? rightEdge - 5 : leftEdge + 5; // 5px antes del cruce (más cerca)
-
-            // Solo considerar la intersección hacia la que nos movemos
-            boolean approachingThis = westbound ?
-                (currentX > stopX && newX <= stopX + STOP_DISTANCE) :
-                (currentX < stopX && newX >= stopX - STOP_DISTANCE);
-
-            if (!approachingThis) continue;
-
-            // Si luz roja (o amarilla para no emergencias), detenerse en stopX
-            boolean allowed = (light == TrafficLightState.GREEN) ||
-                             (light == TrafficLightState.YELLOW && vehicle.getType() == VehicleType.EMERGENCY);
-
-            if (!allowed) {
-                double clampX = westbound ? Math.max(newX, stopX) : Math.min(newX, stopX);
-                updateVehiclePosition(clampX, y);
-                if (Math.abs(clampX - stopX) < 1.0) {
-                    vehicle.setWaitingAtLight(true);
-                    currentState = State.WAITING_AT_LIGHT;
-                }
-                return; // No avanzar más si estamos esperando
-            }
-
-            // Marcar que ha pasado la última intersección
-            if (i == streets.length - 1) {
-                // Si estamos suficientemente lejos de la intersección después de cruzar
-                boolean pastIntersection = westbound ?
-                    (currentX < leftEdge - HIGHWAY_INTERSECTION_BUFFER) :
-                    (currentX > rightEdge + HIGHWAY_INTERSECTION_BUFFER);
-
-                if (pastIntersection) {
-                    hasCrossedLastLight = true;
-                }
-            }
-
-            break;
-        }
-
-        updateVehiclePosition(newX, y);
-    }
-
     private void moveStreetVehicleTowardsStop() {
         double[] stop = vehicle.getStartPoint().getStopCoordinates();
         double dx = stop[0] - vehicle.getX();
@@ -211,7 +179,18 @@ public class VehicleTask implements Runnable {
         double ny = vehicle.getY() + (dy / dist) * step;
 
         if (!collisionDetector.canMove(vehicle, nx, ny, allVehicles)) {
-            // Si detectamos colisión, intentar movernos más lento
+            stuckCounter++;
+
+            // Si estamos bloqueados por demasiado tiempo, aplicar un pequeño movimiento aleatorio
+            if (stuckCounter > MAX_STUCK_COUNT) {
+                double jitterX = (random.nextDouble() - 0.5) * 3.0;
+                double jitterY = (random.nextDouble() - 0.5) * 3.0;
+                updateVehiclePosition(vehicle.getX() + jitterX, vehicle.getY() + jitterY);
+                stuckCounter = 0;
+                return;
+            }
+
+            // Intentar con velocidad reducida
             step = step * 0.5;
             nx = vehicle.getX() + (dx / dist) * step;
             ny = vehicle.getY() + (dy / dist) * step;
@@ -222,6 +201,7 @@ public class VehicleTask implements Runnable {
             }
         }
 
+        stuckCounter = 0; // Resetear contador si nos movemos con éxito
         updateVehiclePosition(nx, ny);
     }
 
@@ -234,7 +214,7 @@ public class VehicleTask implements Runnable {
         if (vehicle.isHighwayVehicle()) {
             // En autopista, respetar verde; emergencia puede pasar en amarillo
             canCross = (light == TrafficLightState.GREEN) ||
-                       (light == TrafficLightState.YELLOW && vehicle.getType() == VehicleType.EMERGENCY);
+                    (light == TrafficLightState.YELLOW && vehicle.getType() == VehicleType.EMERGENCY);
             if (canCross) {
                 vehicle.setWaitingAtLight(false);
                 currentState = State.APPROACHING; // Reanudar avance
@@ -258,7 +238,7 @@ public class VehicleTask implements Runnable {
                 if (other.isInIntersection()) {
                     // Si hay otro vehículo en la intersección, verificar la distancia
                     double distance = collisionDetector.calculateDistance(
-                        vehicle.getX(), vehicle.getY(), other.getX(), other.getY());
+                            vehicle.getX(), vehicle.getY(), other.getX(), other.getY());
                     if (distance < 60) {
                         hasSpace = false;
                         break;
@@ -314,7 +294,22 @@ public class VehicleTask implements Runnable {
                 vehicle.setInIntersection(false);
                 IntersectionSemaphore sem = lifecycleManager.getIntersectionSemaphore();
                 if (sem != null) sem.release();
-                currentState = State.EXITING;
+
+                // Calcular punto objetivo para movimiento post-giro
+                double dx = exit[0] - startX;
+                double dy = exit[1] - startY;
+                double length = Math.hypot(dx, dy);
+
+                if (length > 0) {
+                    // Normalizar y extender en la misma dirección
+                    dx = dx / length;
+                    dy = dy / length;
+                    postTurnTargetX = exit[0] + dx * POST_TURN_DISTANCE;
+                    postTurnTargetY = exit[1] + dy * POST_TURN_DISTANCE;
+                    currentState = State.POST_TURN;
+                } else {
+                    currentState = State.EXITING;
+                }
             });
             t.play();
         });
@@ -322,7 +317,6 @@ public class VehicleTask implements Runnable {
 
     /**
      * Construye el Path de cruce. Para STRAIGHT usa línea recta; para LEFT/RIGHT/U_TURN usa curvas Bezier.
-     * Ajusta el 'radius' si tu intersección es más ancha o estrecha (ancho calle ~80 px en este proyecto).
      */
     private javafx.scene.shape.Path buildCrossingPath(StartPoint sp, Direction dir,
                                                       double startX, double startY,
@@ -340,8 +334,8 @@ public class VehicleTask implements Runnable {
         double[] vin = incomingUnitVector(sp);
         double[] vout = outgoingUnitVector(sp, dir);
 
-        // Radio/holgura de giro (ajustable)
-        double radius = 55.0;
+        // Radio/holgura de giro (ajustable) - Aumentado para curvas más amplias
+        double radius = 60.0;  // Aumentado de 55 a 60
 
         // Puntos de control básicos
         double cp1x = startX + vin[0] * radius;
@@ -352,7 +346,7 @@ public class VehicleTask implements Runnable {
         if (dir == Direction.U_TURN) {
             // Para U-TURN levantamos la curva hacia el interior con un desplazamiento perpendicular
             double[] n = new double[]{ -vin[1], vin[0] }; // perpendicular (giro 90°)
-            double bump = radius * 0.8;
+            double bump = radius * 1.5;  // Aumentado de 0.8 a 1.5 para curvas U más amplias
             cp1x += n[0] * bump;
             cp1y += n[1] * bump;
             cp2x -= n[0] * bump;
@@ -367,7 +361,6 @@ public class VehicleTask implements Runnable {
 
     /**
      * Dirección de entrada (unitaria) según el StartPoint.
-     * Convención de pantalla: +X derecha, +Y hacia abajo.
      */
     private double[] incomingUnitVector(StartPoint sp) {
         return switch (sp) {
@@ -431,5 +424,281 @@ public class VehicleTask implements Runnable {
                 case EAST, WEST -> "CalleDer";       // Valor por defecto para no-autopista
             };
         }
+    }
+
+    private void moveHighwayVehicle() {
+        double currentX = vehicle.getX();
+        double y = vehicle.getY();
+        boolean westbound = vehicle.getHighwayLane().isWestbound();
+        double newX = westbound ? currentX - HIGHWAY_SPEED : currentX + HIGHWAY_SPEED;
+
+        // Fin de autopista -> salir
+        if (newX < -20 || newX > 1180) {
+            currentState = State.EXITING;
+            return;
+        }
+
+        // Verificar colisiones
+        Collection<Vehicle> allVehicles = lifecycleManager.getAllActiveVehicles();
+        if (!collisionDetector.canMove(vehicle, newX, y, allVehicles)) {
+            stuckCounter++;
+
+            // Si estamos bloqueados por demasiado tiempo, aplicar un pequeño movimiento aleatorio
+            if (stuckCounter > MAX_STUCK_COUNT) {
+                double jitterX = (random.nextDouble() - 0.5) * 3.0;
+                double jitterY = (random.nextDouble() - 0.5) * 3.0;
+                updateVehiclePosition(vehicle.getX() + jitterX, vehicle.getY() + jitterY);
+                stuckCounter = 0;
+                return;
+            }
+
+            // Intentar con velocidad reducida
+            double halfSpeed = HIGHWAY_SPEED * 0.5;
+            double saferX = westbound ? currentX - halfSpeed : currentX + halfSpeed;
+
+            if (collisionDetector.canMove(vehicle, saferX, y, allVehicles)) {
+                // Podemos movernos más lento
+                newX = saferX;
+            } else {
+                // Mejor quedarnos quietos
+                return;
+            }
+        }
+
+        stuckCounter = 0; // Resetear contador si nos movemos con éxito
+
+        // Detectar si hay un vehículo adelante y ajustar velocidad
+        CollisionDetector.VehicleAheadInfo ahead = collisionDetector.detectVehicleAhead(vehicle, allVehicles);
+        if (ahead != null && ahead.getDistance() < 80) {
+            // Reducir más la velocidad cuanto más cerca
+            double slowFactor = Math.max(0.3, ahead.getDistance() / 80.0);
+            newX = westbound ?
+                    currentX - (HIGHWAY_SPEED * slowFactor) :
+                    currentX + (HIGHWAY_SPEED * slowFactor);
+        }
+
+        // NUEVA LÓGICA: Verificar si debe girar en alguna intersección
+        if (vehicle.getTargetIntersection() >= 0 &&
+                vehicle.getDirection() != Direction.STRAIGHT) {
+
+            // Obtener la coordenada X de la intersección objetivo
+            int targetX = VALID_INTERSECTIONS[vehicle.getTargetIntersection()];
+
+            // Calcular si estamos en la zona de giro
+            boolean isInTurnZone = westbound ?
+                    (currentX > targetX && currentX < targetX + 90) :
+                    (currentX < targetX + 80 && currentX > targetX - 10);
+
+            if (isInTurnZone) {
+                // Verificar semáforo
+                String group = getTrafficLightGroup();
+                TrafficLightState light = lifecycleManager.getTrafficLightState(group);
+
+                boolean canTurn = (light == TrafficLightState.GREEN) ||
+                        (light == TrafficLightState.YELLOW &&
+                                vehicle.getType() == VehicleType.EMERGENCY);
+
+                if (canTurn) {
+                    vehicle.setInIntersection(true);
+                    performHighwayTurn();
+                    return;
+                } else {
+                    // Detenerse en la intersección hasta que cambie el semáforo
+                    double stopX = westbound ? targetX + 80 : targetX;
+                    updateVehiclePosition(stopX, y);
+                    vehicle.setWaitingAtLight(true);
+                    currentState = State.WAITING_AT_LIGHT;
+                    return;
+                }
+            }
+        }
+
+        // Intersecciones verticales en X: 70, 390, 690, 1010 (ancho calle 80)
+        int[] streets = {70, 390, 690, 1010};
+        String group = getTrafficLightGroup();
+        TrafficLightState light = lifecycleManager.getTrafficLightState(group);
+
+        // Si el vehículo ya ha cruzado la última intersección, no debería detenerse más
+        if (hasCrossedLastLight) {
+            updateVehiclePosition(newX, y);
+            return;
+        }
+
+        // Calcular borde de pare según dirección
+        for (int i = 0; i < streets.length; i++) {
+            int sx = streets[i];
+            double leftEdge = sx;
+            double rightEdge = sx + 80;
+            double stopX = westbound ? rightEdge - 5 : leftEdge + 5; // 5px antes del cruce (más cerca)
+
+            // Solo considerar la intersección hacia la que nos movemos
+            boolean approachingThis = westbound ?
+                    (currentX > stopX && newX <= stopX + STOP_DISTANCE) :
+                    (currentX < stopX && newX >= stopX - STOP_DISTANCE);
+
+            if (!approachingThis) continue;
+
+            // Si luz roja (o amarilla para no emergencias), detenerse en stopX
+            boolean allowed = (light == TrafficLightState.GREEN) ||
+                    (light == TrafficLightState.YELLOW && vehicle.getType() == VehicleType.EMERGENCY);
+
+            if (!allowed) {
+                double clampX = westbound ? Math.max(newX, stopX) : Math.min(newX, stopX);
+                updateVehiclePosition(clampX, y);
+                if (Math.abs(clampX - stopX) < 1.0) {
+                    vehicle.setWaitingAtLight(true);
+                    currentState = State.WAITING_AT_LIGHT;
+                }
+                return; // No avanzar más si estamos esperando
+            }
+
+            // Marcar que ha pasado la última intersección
+            if (i == streets.length - 1) {
+                // Si estamos suficientemente lejos de la intersección después de cruzar
+                boolean pastIntersection = westbound ?
+                        (currentX < leftEdge - HIGHWAY_INTERSECTION_BUFFER) :
+                        (currentX > rightEdge + HIGHWAY_INTERSECTION_BUFFER);
+
+                if (pastIntersection) {
+                    hasCrossedLastLight = true;
+                }
+            }
+
+            break;
+        }
+
+        updateVehiclePosition(newX, y);
+    }
+
+    private void performHighwayTurn() {
+        Platform.runLater(() -> {
+            Circle node = lifecycleManager.getVehicleNode(vehicle.getId());
+            if (node == null) return;
+
+            // Coordenadas actuales
+            double startX = node.getCenterX();
+            double startY = node.getCenterY();
+
+            // Calcular coordenadas de destino según dirección
+            double endX, endY;
+            boolean westbound = vehicle.getHighwayLane().isWestbound();
+            int intersectionX = VALID_INTERSECTIONS[vehicle.getTargetIntersection()];
+
+            switch (vehicle.getDirection()) {
+                case LEFT:
+                    // Si va hacia oeste (arriba), gira hacia el sur
+                    // Si va hacia este (abajo), gira hacia el norte
+                    endX = intersectionX + 40; // 40px a la derecha del centro de la intersección
+                    endY = westbound ? 500 : 100; // Hacia abajo o arriba según carril
+                    break;
+                case RIGHT:
+                    // Si va hacia oeste (arriba), gira hacia el norte
+                    // Si va hacia este (abajo), gira hacia el sur
+                    endX = intersectionX + 40;
+                    endY = westbound ? 100 : 500;
+                    break;
+                case U_TURN:
+                    // Mejorado: puntos finales más precisos para U-turns
+                    endX = intersectionX + (westbound ? 120 : -120); // Más lejos en X para curva más amplia
+                    endY = westbound ? 360 : 260; // Y del carril contrario
+                    break;
+                default:
+                    // Nunca debería llegar aquí
+                    endX = startX + 100;
+                    endY = startY;
+            }
+
+            // Crear curva de giro
+            Path path = new Path();
+            path.getElements().add(new MoveTo(startX, startY));
+
+            // Puntos de control para curvas Bezier - Mejorados para curvas más naturales
+            double controlX1, controlY1, controlX2, controlY2;
+
+            if (vehicle.getDirection() == Direction.LEFT) {
+                controlX1 = startX + (westbound ? -40 : 40);  // Aumentado de 30 a 40
+                controlY1 = startY;
+                controlX2 = endX;
+                controlY2 = endY - (westbound ? 60 : -60);  // Aumentado de 50 a 60
+            } else if (vehicle.getDirection() == Direction.RIGHT) {
+                controlX1 = startX + (westbound ? -40 : 40);  // Aumentado de 30 a 40
+                controlY1 = startY;
+                controlX2 = endX;
+                controlY2 = endY + (westbound ? 60 : -60);  // Aumentado de 50 a 60
+            } else { // U_TURN - Mejoras significativas
+                // Puntos de control más alejados para curva más amplia
+                controlX1 = startX + (westbound ? -70 : 70);  // Aumentado de 50 a 70
+                controlY1 = startY + (westbound ? 80 : -80);  // Aumentado de 50 a 80
+                controlX2 = endX - (westbound ? 70 : -70);    // Aumentado de 50 a 70
+                controlY2 = endY - (westbound ? 30 : -30);    // Nuevo ajuste para suavizar
+            }
+
+            path.getElements().add(new CubicCurveTo(
+                    controlX1, controlY1, controlX2, controlY2, endX, endY));
+
+            // Animar giro - Aumentado tiempo para U-turns
+            double animationDuration = (vehicle.getDirection() == Direction.U_TURN) ? 2.5 : 2.0;
+            PathTransition transition = new PathTransition(Duration.seconds(animationDuration), path, node);
+            transition.setInterpolator(Interpolator.EASE_BOTH);
+
+            // Actualizar posición del modelo durante la animación
+            transition.currentTimeProperty().addListener((obs, ot, nt) -> {
+                double x = node.getCenterX() + node.getTranslateX();
+                double y = node.getCenterY() + node.getTranslateY();
+                vehicle.updatePosition(x, y);
+            });
+
+            // Modificar para calcular un punto adicional en la misma dirección después del giro
+            transition.setOnFinished(e -> {
+                // Liberar semáforo y actualizar estado
+                vehicle.setInIntersection(false);
+                IntersectionSemaphore sem = lifecycleManager.getIntersectionSemaphore();
+                if (sem != null) sem.release();
+
+                // Calcular puntos de destino después del giro
+                Direction dir = vehicle.getDirection();
+
+                if (dir == Direction.LEFT) {
+                    if (westbound) {
+                        // Giro hacia el sur desde avenida superior
+                        postTurnTargetX = endX;
+                        postTurnTargetY = endY + POST_TURN_DISTANCE;
+                    } else {
+                        // Giro hacia el norte desde avenida inferior
+                        postTurnTargetX = endX;
+                        postTurnTargetY = endY - POST_TURN_DISTANCE;
+                    }
+                } else if (dir == Direction.RIGHT) {
+                    if (westbound) {
+                        // Giro hacia el norte desde avenida superior
+                        postTurnTargetX = endX;
+                        postTurnTargetY = endY - POST_TURN_DISTANCE;
+                    } else {
+                        // Giro hacia el sur desde avenida inferior
+                        postTurnTargetX = endX;
+                        postTurnTargetY = endY + POST_TURN_DISTANCE;
+                    }
+                } else if (dir == Direction.U_TURN) {
+                    if (westbound) {
+                        // U-turn a la avenida inferior (hacia el este) - Mayor distancia X
+                        postTurnTargetX = endX + POST_TURN_DISTANCE;
+                        postTurnTargetY = endY;
+                    } else {
+                        // U-turn a la avenida superior (hacia el oeste) - Mayor distancia X
+                        postTurnTargetX = endX - POST_TURN_DISTANCE;
+                        postTurnTargetY = endY;
+                    }
+                } else {
+                    // Caso por defecto (nunca debería llegar aquí)
+                    postTurnTargetX = endX + (westbound ? -POST_TURN_DISTANCE : POST_TURN_DISTANCE);
+                    postTurnTargetY = endY;
+                }
+
+                // Cambiar al estado POST_TURN en lugar de directamente a EXITING
+                currentState = State.POST_TURN;
+            });
+
+            transition.play();
+        });
     }
 }

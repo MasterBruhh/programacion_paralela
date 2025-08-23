@@ -40,6 +40,10 @@
                         <MenuItem id="U"           mnemonicParsing="false" onAction="#handleConfiguracion" text="En U"/>
                     </items>
                 </Menu>
+                <Menu text="Intersección">
+                    <MenuItem id="PrimeraInterseccion" text="Primera intersección (X=390)" onAction="#handleConfiguracion"/>
+                    <MenuItem id="SegundaInterseccion" text="Segunda intersección (X=690)" onAction="#handleConfiguracion"/>
+                </Menu>
                 <Menu mnemonicParsing="false" text="Acción">
                     <items>
                         <MenuItem mnemonicParsing="false" onAction="#crearVehiculo" text="Crear Vehículo"/>

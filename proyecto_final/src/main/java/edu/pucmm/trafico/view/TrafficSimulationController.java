@@ -26,6 +26,8 @@ public class TrafficSimulationController {
     private StartPoint selectedStartPoint = StartPoint.NORTH_L;
     private VehicleType selectedVehicleType = VehicleType.NORMAL;
     private Direction selectedDirection = Direction.STRAIGHT;
+    // Añadida variable para la intersección seleccionada
+    private int selectedIntersection = 0; // 0 = primera (X=390), 1 = segunda (X=690)
     private Label configLabel;
 
     private final TrafficLightGroup CalleIzqGroup = new TrafficLightGroup("CalleIzq");
@@ -35,6 +37,9 @@ public class TrafficSimulationController {
     private TrafficLightController lightController;
 
     private Map<String, TrafficLightGroup> trafficLightGroups;
+
+    // Array con nombres descriptivos de las intersecciones
+    private final String[] interseccionesDescripcion = {"primera (X=390)", "segunda (X=690)"};
 
     @FXML
     public void initialize() {
@@ -67,7 +72,15 @@ public class TrafficSimulationController {
     }
 
     private String getConfigText() {
-        return "Configuración: " + selectedStartPoint + " | " + selectedVehicleType + " | " + selectedDirection;
+        String config = "Configuración: " + selectedStartPoint + " | " + selectedVehicleType + " | " + selectedDirection;
+
+        // Añadir información de la intersección seleccionada si es relevante
+        if ((selectedStartPoint == StartPoint.EAST || selectedStartPoint == StartPoint.WEST) &&
+                selectedDirection != Direction.STRAIGHT) {
+            config += " | Intersección: " + (selectedIntersection == 0 ? "Primera" : "Segunda");
+        }
+
+        return config;
     }
 
     @FXML
@@ -93,6 +106,9 @@ public class TrafficSimulationController {
             case "VIzquierda"      -> selectedDirection = Direction.LEFT;
             case "VDerecha"        -> selectedDirection = Direction.RIGHT;
             case "U"               -> selectedDirection = Direction.U_TURN;
+            // Selección de intersección (nuevas opciones)
+            case "PrimeraInterseccion" -> selectedIntersection = 0;
+            case "SegundaInterseccion" -> selectedIntersection = 1;
             default -> { /* ignorar */ }
         }
 
@@ -109,8 +125,16 @@ public class TrafficSimulationController {
             HighwayLane lane = HighwayLane.getRandomLane(goingWest, selectedDirection);
 
             vehicle = new Vehicle(selectedVehicleType, lane, selectedDirection);
-            // Salida aleatoria para autopista
-            vehicle.setTargetExit(new Random().nextInt(4));
+
+            // Si no es STRAIGHT y la dirección implica un giro, asignar intersección objetivo
+            if (selectedDirection != Direction.STRAIGHT) {
+                // Usar la intersección seleccionada por el usuario
+                vehicle.setTargetIntersection(selectedIntersection);
+                System.out.println("Vehículo girará en la " + interseccionesDescripcion[selectedIntersection]);
+            } else {
+                // Para movimientos rectos, mantener la configuración original
+                vehicle.setTargetExit(new Random().nextInt(4));
+            }
         } else {
             // Calles verticales: NORTH_L/NORTH_D/SOUTH_L/SOUTH_D
             vehicle = new Vehicle(selectedVehicleType, selectedStartPoint, selectedDirection);
@@ -122,15 +146,29 @@ public class TrafficSimulationController {
         alert.setTitle("Vehículo Creado");
         alert.setHeaderText("Vehículo #" + vehicle.getId() + " creado exitosamente");
 
-        String content = String.format(
-                "Tipo: %s%nPunto de salida: %s%nDirección: %s%nPosición inicial: (%.0f, %.0f)%nEs vehículo de autopista: %s",
-                selectedVehicleType,
-                selectedStartPoint,
-                selectedDirection,
-                vehicle.getX(),
-                vehicle.getY(),
-                vehicle.isHighwayVehicle() ? "Sí" : "No"
-        );
+        String content;
+        if (vehicle.isHighwayVehicle() && selectedDirection != Direction.STRAIGHT) {
+            content = String.format(
+                    "Tipo: %s%nPunto de salida: %s%nDirección: %s%nPosición inicial: (%.0f, %.0f)%n" +
+                            "Es vehículo de autopista: Sí%nGirará en la %s intersección",
+                    selectedVehicleType,
+                    selectedStartPoint,
+                    selectedDirection,
+                    vehicle.getX(),
+                    vehicle.getY(),
+                    interseccionesDescripcion[vehicle.getTargetIntersection()]
+            );
+        } else {
+            content = String.format(
+                    "Tipo: %s%nPunto de salida: %s%nDirección: %s%nPosición inicial: (%.0f, %.0f)%nEs vehículo de autopista: %s",
+                    selectedVehicleType,
+                    selectedStartPoint,
+                    selectedDirection,
+                    vehicle.getX(),
+                    vehicle.getY(),
+                    vehicle.isHighwayVehicle() ? "Sí" : "No"
+            );
+        }
 
         alert.setContentText(content);
         alert.showAndWait();
@@ -157,13 +195,24 @@ public class TrafficSimulationController {
                 HighwayLane lane = HighwayLane.getRandomLane(goingWest, dir);
 
                 Vehicle v = new Vehicle(tipo, lane, dir);
-                v.setTargetExit(rnd.nextInt(4));
-                simulationEngine.addVehicle(v);
 
+                // Si no es recto, asignar una intersección para girar
+                if (dir != Direction.STRAIGHT) {
+                    // Para lotes aleatorios, seguimos seleccionando intersección aleatoria
+                    v.setTargetIntersection(rnd.nextInt(2));
+                    resumen.append(String.format("#%d -> AUTOPISTA | %s | Carril %s | Dir: %s | Girará en intersección %d%n",
+                            v.getId(), tipo.getDescription(), lane.getDescription(),
+                            dir.getDescription(), v.getTargetIntersection() + 1));
+                } else {
+                    // Para movimientos rectos, usar la lógica de salida existente
+                    v.setTargetExit(rnd.nextInt(4));
+                    resumen.append(String.format("#%d -> AUTOPISTA | %s | Carril %s | Dir: %s | Salida: %d%n",
+                            v.getId(), tipo.getDescription(), lane.getDescription(),
+                            dir.getDescription(), v.getTargetExit()));
+                }
+
+                simulationEngine.addVehicle(v);
                 autopista++;
-                resumen.append(String.format("#%d -> AUTOPISTA | %s | Carril %s | Dir: %s | Salida: %d%n",
-                        v.getId(), tipo.getDescription(), lane.getDescription(),
-                        dir.getDescription(), v.getTargetExit()));
             } else {
                 // Calle: elegir entre L/D de norte o sur
                 VehicleType tipo = pickVehicleType(rnd);
@@ -186,7 +235,6 @@ public class TrafficSimulationController {
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
-
         }
 
         resumen.append(String.format("\nTotal: %d de autopista, %d de calle", autopista, calle));
@@ -316,6 +364,23 @@ public class TrafficSimulationController {
 
         // Indicadores de carriles de autopista para debug
         drawLaneIndicators();
+
+        // Agregar etiquetas para las intersecciones donde se puede girar
+        Label inter1 = new Label("1");
+        inter1.setTextFill(Color.WHITE);
+        inter1.setFont(Font.font("Arial", FontWeight.BOLD, 16));
+        inter1.setStyle("-fx-background-color: rgba(0, 0, 0, 0.7); -fx-padding: 4; -fx-background-radius: 10;");
+        inter1.setLayoutX(430);
+        inter1.setLayoutY(180);
+
+        Label inter2 = new Label("2");
+        inter2.setTextFill(Color.WHITE);
+        inter2.setFont(Font.font("Arial", FontWeight.BOLD, 16));
+        inter2.setStyle("-fx-background-color: rgba(0, 0, 0, 0.7); -fx-padding: 4; -fx-background-radius: 10;");
+        inter2.setLayoutX(730);
+        inter2.setLayoutY(180);
+
+        lienzo.getChildren().addAll(inter1, inter2);
     }
 
     private void drawLaneIndicators() {

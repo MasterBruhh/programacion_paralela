@@ -30,9 +30,6 @@ public enum HighwayLane {
         this.laneNumber = laneNumber;
         this.westbound = westbound;
     }
-    public enum HighwayLaneTurn {
-        FIRSTLEFT, SECONDLEFT, FIRSRIGHT,SECONDRIGHT, FIRST_U_TURN,SECOND_U_TURN
-    }
 
     /**
      * Obtiene la posición X inicial del carril

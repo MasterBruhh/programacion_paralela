@@ -83,11 +83,12 @@ public class Vehicle {
         this.y = lane.getStartY();
         this.targetExit = -1;
         
-        // Validar restricciones de carril
+        // Validar restricciones de carril - Corregir para dar libertad en contexto de menú
+        // Si es carril izquierdo y la dirección no es LEFT o U_TURN, cambiar a STRAIGHT
         if (lane.isLeftLane() && direction != Direction.LEFT && direction != Direction.U_TURN) {
-            throw new IllegalArgumentException(
-                "Carril izquierdo solo para giros a la izquierda o vuelta en U"
-            );
+            // Reportar en consola pero permitir
+            System.out.println("Aviso: Carril izquierdo usado para dirección " + direction + 
+                ". Se recomienda usar LEFT o U_TURN para este carril.");
         }
         
         // Configurar características por tipo
@@ -224,8 +225,8 @@ public class Vehicle {
         
         // Mismo carril y misma dirección
         if (currentLane == emergencyVehicle.getCurrentLane()) {
-            boolean sameDirection = (highwayLane.isNorthbound() == 
-                                   emergencyVehicle.getHighwayLane().isNorthbound());
+            boolean sameDirection = (highwayLane.isWestbound() == 
+                                   emergencyVehicle.getHighwayLane().isWestbound());
             
             if (sameDirection) {
                 // Verificar si la emergencia está detrás

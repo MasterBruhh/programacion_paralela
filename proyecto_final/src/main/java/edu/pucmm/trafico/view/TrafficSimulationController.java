@@ -39,6 +39,7 @@ public class TrafficSimulationController {
     private Map<String, TrafficLightGroup> trafficLightGroups;
 
     // Array con nombres descriptivos de las intersecciones
+    // Solo dos intersecciones principales: X=390 y X=690 (correspondientes a VALID_INTERSECTIONS en VehicleTask)
     private final String[] interseccionesDescripcion = {"primera (X=390)", "segunda (X=690)"};
 
     @FXML
@@ -283,14 +284,18 @@ public class TrafficSimulationController {
 
         // Dibujar calles verticales
         double[] verticalXs = {70, 390, 690, 1010};
+        // VALID_INTERSECTIONS en VehicleTask solo incluye 390 y 690
+        int[] mainIntersections = {1, 2}; // Índices 1 y 2 corresponden a X=390 y X=690
+        
         for (int i = 0; i < verticalXs.length; i++) {
             double x = verticalXs[i];
             Rectangle calle = new Rectangle(x, topMargin, streetWidth, streetLength);
             calle.setFill(Color.GRAY);
             lienzo.getChildren().add(calle);
 
-            // Línea central amarilla para calles con semáforos
-            if (i == 1 || i == 2) {
+            // Línea central amarilla para calles con semáforos (solo intersecciones principales)
+            boolean isMainIntersection = (i == 1 || i == 2);
+            if (isMainIntersection) {
                 double xLinea = x + streetWidth / 2;
                 drawSegmentedLine(xLinea, 0, xLinea, avenueY1, Color.YELLOW, 2, 30, 25);
                 drawSegmentedLine(xLinea, avenueY2 + avenueWidth, xLinea, height, Color.YELLOW, 2, 30, 25);

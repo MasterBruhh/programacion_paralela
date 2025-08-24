@@ -37,6 +37,13 @@ public class CollisionDetector {
         for (Vehicle other : activeVehicles) {
             if (other.getId() == vehicle.getId() || !other.isActive()) continue;
 
+            // Si ambos son de autopista y NO hay cambio de carril, ignorar vehículos de otros carriles
+            if (vehicle.isHighwayVehicle() && other.isHighwayVehicle() && !vehicle.isChangingLane()) {
+                if (vehicle.getCurrentLane() != other.getCurrentLane()) {
+                    continue; // carriles paralelos no se bloquean entre sí
+                }
+            }
+
             // Calcular distancia mínima requerida
             double minDistance = calculateMinDistance(vehicle, other);
 
@@ -190,9 +197,14 @@ public class CollisionDetector {
      */
     private boolean predictHighwayCollision(Vehicle vehicle, double nextX, double nextY,
                                             Vehicle other) {
-        // Solo predecir si están en carriles adyacentes o el mismo
+        // Nuevo criterio: solo considerar el MISMO carril para predicción,
+        // a menos que alguno esté cambiando de carril.
         int laneDiff = Math.abs(vehicle.getCurrentLane() - other.getCurrentLane());
-        if (laneDiff > 1) return false;
+
+        // Si no están en el mismo carril y ninguno está cambiando, no interferir.
+        if (laneDiff != 0 && !(vehicle.isChangingLane() || other.isChangingLane())) {
+            return false;
+        }
 
         // Calcular posiciones futuras en X (movimiento horizontal)
         double vehicleFutureX = nextX;
@@ -213,9 +225,16 @@ public class CollisionDetector {
             }
         }
 
-        // Verificar si habrá superposición (mantener Y constante en autopista)
-        double futureDistance = calculateDistance(vehicleFutureX, nextY,
-                otherFutureX, other.getY());
+        // Verificar si habrá superposición
+        // Si están en el mismo carril, usar distancia en X prioritaria para ser más precisa y
+        // evitar que la separación lateral de carriles afecte.
+        double futureDistance;
+        if (laneDiff == 0) {
+            futureDistance = Math.abs(vehicleFutureX - otherFutureX);
+        } else {
+            // En cambio de carril, usar distancia euclidiana completa
+            futureDistance = calculateDistance(vehicleFutureX, nextY, otherFutureX, other.getY());
+        }
 
         double minSafeDistance = HIGHWAY_MIN_DISTANCE * 0.8;
         return futureDistance < minSafeDistance;
@@ -316,7 +335,7 @@ public class CollisionDetector {
         if (v1.isHighwayVehicle() && v2.isHighwayVehicle()) {
             // Mismo carril y misma dirección
             return v1.getCurrentLane() == v2.getCurrentLane() &&
-                    (v1.getHighwayLane().isNorthbound() == v2.getHighwayLane().isNorthbound());
+                    (v1.getHighwayLane().isWestbound() == v2.getHighwayLane().isWestbound());
         }
 
         // Vehículos de calle
@@ -333,21 +352,22 @@ public class CollisionDetector {
      */
     private boolean isVehicleAhead(Vehicle current, Vehicle other) {
         if (current.isHighwayVehicle() && other.isHighwayVehicle()) {
-            // En autopista, considerar dirección
-            if (current.getHighwayLane().isNorthbound()) {
-                return other.getY() > current.getY();
+            // En autopista, considerar dirección del carril
+            boolean westbound = current.getHighwayLane().isWestbound();
+            if (westbound) {
+                return other.getX() < current.getX(); // Hacia oeste (izquierda)
             } else {
-                return other.getY() < current.getY();
+                return other.getX() > current.getX(); // Hacia este (derecha)
             }
         }
 
         if (!current.isHighwayVehicle() && !other.isHighwayVehicle()) {
             // En calles, considerar punto de inicio (soporte L/D)
             return switch (current.getStartPoint()) {
-                case NORTH_L, NORTH_D -> other.getY() > current.getY();
-                case SOUTH_L, SOUTH_D -> other.getY() < current.getY();
-                case EAST -> other.getX() < current.getX();
-                case WEST -> other.getX() > current.getX();
+                case NORTH_L, NORTH_D -> other.getY() > current.getY(); // Hacia sur (abajo)
+                case SOUTH_L, SOUTH_D -> other.getY() < current.getY(); // Hacia norte (arriba)
+                case EAST -> other.getX() < current.getX();             // Hacia oeste (izquierda)
+                case WEST -> other.getX() > current.getX();             // Hacia este (derecha)
             };
         }
 

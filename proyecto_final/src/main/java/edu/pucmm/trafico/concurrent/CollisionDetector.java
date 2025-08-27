@@ -9,6 +9,7 @@ import java.util.logging.Logger;
 /**
  * Sistema avanzado de detección de colisiones para vehículos de calle y autopista.
  * Implementa algoritmos de predicción y prevención de colisiones.
+ * Incluye lógica especial para vehículos de emergencia.
  */
 public class CollisionDetector {
     private static final Logger logger = Logger.getLogger(CollisionDetector.class.getName());
@@ -18,15 +19,22 @@ public class CollisionDetector {
     private static final double SAFETY_MARGIN = 10.0;
     private static final double STREET_MIN_DISTANCE = 40.0;
     private static final double HIGHWAY_MIN_DISTANCE = 60.0;
-    private static final double EMERGENCY_MIN_DISTANCE = 80.0;
+    private static final double EMERGENCY_MIN_DISTANCE = 20.0; // Emergencias pueden estar más cerca
+    private static final double EMERGENCY_YIELD_DISTANCE = 100.0; // Distancia para ceder paso a emergencia
     private static final double LANE_WIDTH = 30.0;
     private static final double PREDICTION_TIME = 2.0; // segundos
 
     /**
      * Verifica si un vehículo puede moverse a una posición sin colisionar
+     * Incluye lógica especial para vehículos de emergencia
      */
     public boolean canMove(Vehicle vehicle, double nextX, double nextY,
                            Collection<Vehicle> activeVehicles) {
+
+        // Los vehículos de emergencia tienen reglas más flexibles
+        if (vehicle.getType() == VehicleType.EMERGENCY) {
+            return canMoveEmergency(vehicle, nextX, nextY, activeVehicles);
+        }
 
         // Verificación especial para cambios de carril
         if (vehicle.isChangingLane()) {
@@ -37,10 +45,22 @@ public class CollisionDetector {
         for (Vehicle other : activeVehicles) {
             if (other.getId() == vehicle.getId() || !other.isActive()) continue;
 
+            // Si el otro es emergencia y están en misma trayectoria, dar más espacio
+            if (other.getType() == VehicleType.EMERGENCY) {
+                if (areInSamePath(vehicle, other)) {
+                    double distance = calculateDistance(nextX, nextY, other.getX(), other.getY());
+                    if (distance < EMERGENCY_YIELD_DISTANCE) {
+                        logger.fine("Vehículo " + vehicle.getId() + 
+                                  " cediendo espacio a emergencia " + other.getId());
+                        return false; // No moverse para dar espacio
+                    }
+                }
+            }
+
             // Si ambos son de autopista y NO hay cambio de carril, ignorar vehículos de otros carriles
             if (vehicle.isHighwayVehicle() && other.isHighwayVehicle() && !vehicle.isChangingLane()) {
                 if (vehicle.getCurrentLane() != other.getCurrentLane()) {
-                    continue; // carriles paralelos no se bloquean entre sí
+                    continue;
                 }
             }
 
@@ -52,6 +72,11 @@ public class CollisionDetector {
             if (distance < minDistance) {
                 // Verificar si están en trayectorias que se cruzan
                 if (willCollide(vehicle, nextX, nextY, other)) {
+                    // Si el vehículo está cediendo a emergencia, permitir pequeños ajustes
+                    if (vehicle.isEmergencyYielding() && distance > VEHICLE_RADIUS) {
+                        continue;
+                    }
+                    
                     logger.fine("Colisión detectada: Vehículo " + vehicle.getId() +
                             " con " + other.getId() + " a distancia " + distance);
                     return false;
@@ -70,12 +95,43 @@ public class CollisionDetector {
     }
 
     /**
+     * Verificación de movimiento especial para vehículos de emergencia
+     */
+    private boolean canMoveEmergency(Vehicle emergency, double nextX, double nextY,
+                                    Collection<Vehicle> activeVehicles) {
+        // Las emergencias solo evitan colisiones directas
+        for (Vehicle other : activeVehicles) {
+            if (other.getId() == emergency.getId() || !other.isActive()) continue;
+
+            double distance = calculateDistance(nextX, nextY, other.getX(), other.getY());
+            
+            // Solo evitar colisiones muy cercanas
+            if (distance < EMERGENCY_MIN_DISTANCE) {
+                // Si el otro vehículo está cediendo, permitir pasar más cerca
+                if (other.isEmergencyYielding()) {
+                    if (distance > VEHICLE_RADIUS) {
+                        continue;
+                    }
+                }
+                
+                logger.fine("Emergencia " + emergency.getId() + 
+                          " evitando colisión crítica con " + other.getId());
+                return false;
+            }
+        }
+        
+        return true;
+    }
+
+    /**
      * Detecta vehículos adelante en el mismo carril o trayectoria
+     * Prioriza detección de vehículos de emergencia
      */
     public VehicleAheadInfo detectVehicleAhead(Vehicle vehicle,
                                                Collection<Vehicle> activeVehicles) {
         Vehicle closestVehicle = null;
         double closestDistance = Double.MAX_VALUE;
+        boolean emergencyAhead = false;
 
         for (Vehicle other : activeVehicles) {
             if (other.getId() == vehicle.getId() || !other.isActive()) continue;
@@ -89,7 +145,14 @@ public class CollisionDetector {
                             other.getX(), other.getY()
                     );
 
-                    if (distance < closestDistance) {
+                    // Priorizar vehículos de emergencia
+                    if (other.getType() == VehicleType.EMERGENCY) {
+                        if (!emergencyAhead || distance < closestDistance) {
+                            closestDistance = distance;
+                            closestVehicle = other;
+                            emergencyAhead = true;
+                        }
+                    } else if (!emergencyAhead && distance < closestDistance) {
                         closestDistance = distance;
                         closestVehicle = other;
                     }
@@ -98,7 +161,31 @@ public class CollisionDetector {
         }
 
         return closestVehicle != null ?
-                new VehicleAheadInfo(closestVehicle, closestDistance) : null;
+                new VehicleAheadInfo(closestVehicle, closestDistance, emergencyAhead) : null;
+    }
+
+    /**
+     * Detecta vehículos de emergencia en un radio específico
+     */
+    public List<Vehicle> detectEmergencyVehicles(Vehicle vehicle, double radius,
+                                                Collection<Vehicle> activeVehicles) {
+        List<Vehicle> emergencies = new ArrayList<>();
+
+        for (Vehicle other : activeVehicles) {
+            if (other.getId() == vehicle.getId() || !other.isActive()) continue;
+            if (other.getType() != VehicleType.EMERGENCY) continue;
+
+            double distance = calculateDistance(
+                    vehicle.getX(), vehicle.getY(),
+                    other.getX(), other.getY()
+            );
+
+            if (distance <= radius) {
+                emergencies.add(other);
+            }
+        }
+
+        return emergencies;
     }
 
     /**
@@ -126,9 +213,19 @@ public class CollisionDetector {
 
     /**
      * Calcula la velocidad segura basada en el entorno
+     * Da prioridad especial a vehículos de emergencia
      */
     public double calculateSafeSpeed(double currentSpeed, double distanceAhead,
-                                     boolean isHighway) {
+                                     boolean isHighway, boolean emergencyAhead) {
+        // Si hay emergencia adelante, detenerse antes
+        if (emergencyAhead) {
+            double stopDistance = EMERGENCY_YIELD_DISTANCE;
+            if (distanceAhead < stopDistance) {
+                return 0; // Detenerse para dar paso
+            }
+            return currentSpeed * 0.3; // Velocidad muy reducida
+        }
+        
         double minDistance = isHighway ? HIGHWAY_MIN_DISTANCE : STREET_MIN_DISTANCE;
         double stopDistance = minDistance * 0.5;
 
@@ -137,7 +234,7 @@ public class CollisionDetector {
         } else if (distanceAhead < minDistance) {
             // Reducir velocidad proporcionalmente
             double factor = (distanceAhead - stopDistance) / (minDistance - stopDistance);
-            return currentSpeed * factor * 0.5; // Factor adicional de seguridad
+            return currentSpeed * factor * 0.5;
         } else if (distanceAhead < minDistance * 1.5) {
             // Reducción suave
             return currentSpeed * 0.8;
@@ -147,20 +244,121 @@ public class CollisionDetector {
     }
 
     /**
+     * Verifica si debe ceder paso a un vehículo de emergencia
+     */
+    public boolean shouldYieldToEmergency(Vehicle vehicle, Vehicle emergency) {
+        if (vehicle.getType() == VehicleType.EMERGENCY) {
+            return false; // Las emergencias no ceden a otras emergencias
+        }
+
+        if (emergency.getType() != VehicleType.EMERGENCY) {
+            return false;
+        }
+
+        double distance = calculateDistance(
+            vehicle.getX(), vehicle.getY(),
+            emergency.getX(), emergency.getY()
+        );
+
+        // Si está muy cerca, ceder
+        if (distance < EMERGENCY_YIELD_DISTANCE) {
+            // Verificar si están en la misma trayectoria
+            if (areInSamePath(vehicle, emergency)) {
+                // Verificar si la emergencia está aproximándose
+                if (isEmergencyApproaching(vehicle, emergency)) {
+                    return true;
+                }
+            }
+            
+            // Verificar si sus trayectorias se cruzarán pronto
+            if (willPathsCross(vehicle, emergency)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Verifica si una emergencia se está aproximando
+     */
+    private boolean isEmergencyApproaching(Vehicle vehicle, Vehicle emergency) {
+        if (vehicle.isHighwayVehicle() && emergency.isHighwayVehicle()) {
+            // En autopista, verificar dirección y posición relativa
+            boolean sameDirection = vehicle.getHighwayLane().isWestbound() == 
+                                  emergency.getHighwayLane().isWestbound();
+            
+            if (!sameDirection) return false;
+            
+            if (vehicle.getHighwayLane().isWestbound()) {
+                // Va hacia el oeste, emergencia se aproxima si X es mayor
+                return emergency.getX() > vehicle.getX();
+            } else {
+                // Va hacia el este, emergencia se aproxima si X es menor
+                return emergency.getX() < vehicle.getX();
+            }
+        }
+
+        if (!vehicle.isHighwayVehicle() && !emergency.isHighwayVehicle()) {
+            // En calles, verificar según dirección
+            StartPoint vsp = vehicle.getStartPoint();
+            
+            return switch (vsp) {
+                case NORTH_L, NORTH_D -> emergency.getY() < vehicle.getY();
+                case SOUTH_L, SOUTH_D -> emergency.getY() > vehicle.getY();
+                case EAST -> emergency.getX() > vehicle.getX();
+                case WEST -> emergency.getX() < vehicle.getX();
+            };
+        }
+
+        return false;
+    }
+
+    /**
+     * Verifica si las trayectorias de dos vehículos se cruzarán
+     */
+    private boolean willPathsCross(Vehicle v1, Vehicle v2) {
+        // Si uno está en autopista y otro en calle
+        if (v1.isHighwayVehicle() != v2.isHighwayVehicle()) {
+            // Verificar si están cerca de una intersección
+            double intersectionY1 = 260; // Centro de autopista superior
+            double intersectionY2 = 360; // Centro de autopista inferior
+            
+            // Verificar proximidad a intersecciones
+            if (Math.abs(v1.getY() - intersectionY1) < 100 || 
+                Math.abs(v1.getY() - intersectionY2) < 100) {
+                if (Math.abs(v2.getY() - intersectionY1) < 100 || 
+                    Math.abs(v2.getY() - intersectionY2) < 100) {
+                    // Ambos cerca de una intersección
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Verifica si es seguro cambiar de carril
      */
     private boolean canChangeLaneSafely(Vehicle vehicle, double nextX, double nextY,
                                         Collection<Vehicle> activeVehicles) {
         if (!vehicle.isHighwayVehicle()) return true;
 
-        // Zona de seguridad para cambio de carril
-        double safeZoneFront = HIGHWAY_MIN_DISTANCE;
-        double safeZoneBack = HIGHWAY_MIN_DISTANCE * 0.7;
+        // Zona de seguridad para cambio de carril (reducida para emergencias)
+        double safeZoneFront = vehicle.getType() == VehicleType.EMERGENCY ? 
+                              EMERGENCY_MIN_DISTANCE : HIGHWAY_MIN_DISTANCE;
+        double safeZoneBack = safeZoneFront * 0.7;
         double safeZoneSide = LANE_WIDTH;
 
         for (Vehicle other : activeVehicles) {
             if (other.getId() == vehicle.getId() || !other.isActive()) continue;
             if (!other.isHighwayVehicle()) continue;
+
+            // Si el vehículo está cediendo a emergencia, dar más libertad
+            if (vehicle.getType() == VehicleType.EMERGENCY && other.isEmergencyYielding()) {
+                continue;
+            }
 
             // Calcular posición relativa
             double dx = Math.abs(nextX - other.getX());
@@ -174,17 +372,14 @@ public class CollisionDetector {
                 double longitudinalDistance = Math.abs(dy);
                 double requiredDistance = isBehind ? safeZoneBack : safeZoneFront;
 
-                if (longitudinalDistance < requiredDistance) {
-                    // Considerar velocidades relativas
-                    if (other.getSpeed() > vehicle.getSpeed() && isBehind) {
-                        requiredDistance *= 1.5; // Más espacio si viene más rápido
-                    }
+                if (other.getSpeed() > vehicle.getSpeed() && isBehind) {
+                    requiredDistance *= 1.5;
+                }
 
-                    if (longitudinalDistance < requiredDistance) {
-                        logger.fine("Cambio de carril bloqueado: Vehículo " +
+                if (longitudinalDistance < requiredDistance) {
+                    logger.fine("Cambio de carril bloqueado: Vehículo " +
                                 other.getId() + " muy cerca");
-                        return false;
-                    }
+                    return false;
                 }
             }
         }
@@ -193,24 +388,25 @@ public class CollisionDetector {
     }
 
     /**
-     * Predice colisiones futuras en autopista (movimiento horizontal)
+     * Predice colisiones futuras en autopista
      */
     private boolean predictHighwayCollision(Vehicle vehicle, double nextX, double nextY,
                                             Vehicle other) {
-        // Nuevo criterio: solo considerar el MISMO carril para predicción,
-        // a menos que alguno esté cambiando de carril.
+        // Las emergencias tienen predicción más agresiva
+        if (vehicle.getType() == VehicleType.EMERGENCY || 
+            other.getType() == VehicleType.EMERGENCY) {
+            return false; // No predecir colisiones para emergencias
+        }
+
         int laneDiff = Math.abs(vehicle.getCurrentLane() - other.getCurrentLane());
 
-        // Si no están en el mismo carril y ninguno está cambiando, no interferir.
         if (laneDiff != 0 && !(vehicle.isChangingLane() || other.isChangingLane())) {
             return false;
         }
 
-        // Calcular posiciones futuras en X (movimiento horizontal)
         double vehicleFutureX = nextX;
         double otherFutureX = other.getX();
 
-        // Determinar dirección de movimiento
         if (vehicle.getHighwayLane().isWestbound()) {
             vehicleFutureX = nextX - (vehicle.getSpeed() / 10) * PREDICTION_TIME * 10;
         } else {
@@ -225,14 +421,10 @@ public class CollisionDetector {
             }
         }
 
-        // Verificar si habrá superposición
-        // Si están en el mismo carril, usar distancia en X prioritaria para ser más precisa y
-        // evitar que la separación lateral de carriles afecte.
         double futureDistance;
         if (laneDiff == 0) {
             futureDistance = Math.abs(vehicleFutureX - otherFutureX);
         } else {
-            // En cambio de carril, usar distancia euclidiana completa
             futureDistance = calculateDistance(vehicleFutureX, nextY, otherFutureX, other.getY());
         }
 
@@ -251,7 +443,7 @@ public class CollisionDetector {
 
         // Para vehículos en el mismo carril
         if (areInSamePath(v1, v2)) {
-            return true; // La distancia ya fue verificada
+            return true;
         }
 
         return false;
@@ -261,19 +453,21 @@ public class CollisionDetector {
      * Verifica colisiones en intersección
      */
     private boolean checkIntersectionCollision(Vehicle v1, double x1, double y1, Vehicle v2) {
-        // Zona de intersección aproximada
+        // Si uno es emergencia, dar prioridad
+        if (v1.getType() == VehicleType.EMERGENCY || v2.getType() == VehicleType.EMERGENCY) {
+            return false; // No bloquear emergencias en intersección
+        }
+
         double intersectionCenterX = 430;
         double intersectionCenterY = 295;
         double intersectionRadius = 100;
 
-        // Verificar si ambos están en la zona de intersección
         boolean v1InIntersection = calculateDistance(x1, y1,
                 intersectionCenterX, intersectionCenterY) < intersectionRadius;
         boolean v2InIntersection = calculateDistance(v2.getX(), v2.getY(),
                 intersectionCenterX, intersectionCenterY) < intersectionRadius;
 
         if (v1InIntersection && v2InIntersection) {
-            // Verificar si sus trayectorias se cruzan
             return doTrajectoriesIntersect(v1, v2);
         }
 
@@ -284,6 +478,11 @@ public class CollisionDetector {
      * Verifica si las trayectorias de dos vehículos se cruzan
      */
     private boolean doTrajectoriesIntersect(Vehicle v1, Vehicle v2) {
+        // Las emergencias tienen prioridad absoluta
+        if (v1.getType() == VehicleType.EMERGENCY || v2.getType() == VehicleType.EMERGENCY) {
+            return false;
+        }
+
         if (v1.getStartPoint() == null || v2.getStartPoint() == null) return false;
 
         StartPoint sp1 = v1.getStartPoint();
@@ -291,7 +490,6 @@ public class CollisionDetector {
         Direction d1 = v1.getDirection();
         Direction d2 = v2.getDirection();
 
-        // Norte/Sur recto vs Este/Oeste recto (soporte para NORTH_L/NORTH_D/SOUTH_L/SOUTH_D)
         boolean v1NS = isNorthEntry(sp1) || isSouthEntry(sp1);
         boolean v2NS = isNorthEntry(sp2) || isSouthEntry(sp2);
         boolean v1EW = sp1 == StartPoint.EAST || sp1 == StartPoint.WEST;
@@ -302,8 +500,6 @@ public class CollisionDetector {
             return true;
         }
 
-        // TODO: Implementar lógica más detallada para giros (LEFT/RIGHT/U_TURN) considerando carriles
-
         return false;
     }
 
@@ -311,14 +507,20 @@ public class CollisionDetector {
      * Calcula la distancia mínima requerida entre dos vehículos
      */
     private double calculateMinDistance(Vehicle v1, Vehicle v2) {
+        // Si uno es emergencia, reducir distancia mínima
+        if (v1.getType() == VehicleType.EMERGENCY || v2.getType() == VehicleType.EMERGENCY) {
+            return EMERGENCY_MIN_DISTANCE;
+        }
+
         double baseDistance = v1.isHighwayVehicle() ?
                 HIGHWAY_MIN_DISTANCE : STREET_MIN_DISTANCE;
 
         // Ajustar por tipo de vehículo
-        if (v1.getType() == VehicleType.EMERGENCY || v2.getType() == VehicleType.EMERGENCY) {
-            baseDistance = EMERGENCY_MIN_DISTANCE;
-        } else if (v1.getType() == VehicleType.HEAVY || v2.getType() == VehicleType.HEAVY) {
+        if (v1.getType() == VehicleType.HEAVY || v2.getType() == VehicleType.HEAVY) {
             baseDistance *= 1.3;
+        } else if (v1.getType() == VehicleType.PUBLIC_TRANSPORT || 
+                   v2.getType() == VehicleType.PUBLIC_TRANSPORT) {
+            baseDistance *= 1.2;
         }
 
         // Ajustar por velocidad
@@ -333,14 +535,12 @@ public class CollisionDetector {
     private boolean areInSamePath(Vehicle v1, Vehicle v2) {
         // Vehículos de autopista
         if (v1.isHighwayVehicle() && v2.isHighwayVehicle()) {
-            // Mismo carril y misma dirección
             return v1.getCurrentLane() == v2.getCurrentLane() &&
                     (v1.getHighwayLane().isWestbound() == v2.getHighwayLane().isWestbound());
         }
 
         // Vehículos de calle
         if (!v1.isHighwayVehicle() && !v2.isHighwayVehicle()) {
-            // Mismo punto de inicio = mismo carril (NORTH_L != NORTH_D)
             return v1.getStartPoint() == v2.getStartPoint();
         }
 
@@ -352,22 +552,20 @@ public class CollisionDetector {
      */
     private boolean isVehicleAhead(Vehicle current, Vehicle other) {
         if (current.isHighwayVehicle() && other.isHighwayVehicle()) {
-            // En autopista, considerar dirección del carril
             boolean westbound = current.getHighwayLane().isWestbound();
             if (westbound) {
-                return other.getX() < current.getX(); // Hacia oeste (izquierda)
+                return other.getX() < current.getX();
             } else {
-                return other.getX() > current.getX(); // Hacia este (derecha)
+                return other.getX() > current.getX();
             }
         }
 
         if (!current.isHighwayVehicle() && !other.isHighwayVehicle()) {
-            // En calles, considerar punto de inicio (soporte L/D)
             return switch (current.getStartPoint()) {
-                case NORTH_L, NORTH_D -> other.getY() > current.getY(); // Hacia sur (abajo)
-                case SOUTH_L, SOUTH_D -> other.getY() < current.getY(); // Hacia norte (arriba)
-                case EAST -> other.getX() < current.getX();             // Hacia oeste (izquierda)
-                case WEST -> other.getX() > current.getX();             // Hacia este (derecha)
+                case NORTH_L, NORTH_D -> other.getY() > current.getY();
+                case SOUTH_L, SOUTH_D -> other.getY() < current.getY();
+                case EAST -> other.getX() < current.getX();
+                case WEST -> other.getX() > current.getX();
             };
         }
 
@@ -381,7 +579,6 @@ public class CollisionDetector {
         return Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
     }
 
-    // Helpers para categorías de StartPoint en calles
     private boolean isNorthEntry(StartPoint sp) {
         return sp == StartPoint.NORTH_L || sp == StartPoint.NORTH_D;
     }
@@ -396,10 +593,16 @@ public class CollisionDetector {
     public static class VehicleAheadInfo {
         private final Vehicle vehicle;
         private final double distance;
+        private final boolean isEmergency;
 
         public VehicleAheadInfo(Vehicle vehicle, double distance) {
+            this(vehicle, distance, false);
+        }
+
+        public VehicleAheadInfo(Vehicle vehicle, double distance, boolean isEmergency) {
             this.vehicle = vehicle;
             this.distance = distance;
+            this.isEmergency = isEmergency;
         }
 
         public Vehicle getVehicle() {
@@ -408,6 +611,10 @@ public class CollisionDetector {
 
         public double getDistance() {
             return distance;
+        }
+
+        public boolean isEmergency() {
+            return isEmergency;
         }
     }
 }

@@ -34,7 +34,7 @@ public class VehicleTask implements Runnable {
     private static final double STREET_SPEED = 3.0;     // px/frame
     private static final double STOP_DISTANCE = 50.0;   // px - Distancia de detección antes del semáforo (aumentada significativamente)
     private static final double HIGHWAY_INTERSECTION_BUFFER = 100.0; // px para que no paren en mitad de autopista
-    private static final int[] VALID_INTERSECTIONS = {390, 690}; // X-coordenadas de SOLO las intersecciones principales con semáforos
+    private static final int[] VALID_INTERSECTIONS = {70, 390, 690, 1010}; // Todas las 4 intersecciones
     private static final double POST_TURN_DISTANCE = 250.0; // Mayor distancia después del giro para movimiento más natural
     // Geometría de calles verticales (coincide con drawRoadsWithLanes en el controlador)
     // Centros de carril de calle respecto al borde izquierdo de la calle
@@ -573,13 +573,29 @@ public class VehicleTask implements Runnable {
 
     private String getTrafficLightGroup() {
         if (vehicle.isHighwayVehicle()) {
-            return vehicle.getHighwayLane().isWestbound() ? "ARRIBA" : "ABAJO";
+            boolean westbound = vehicle.getHighwayLane().isWestbound();
+
+            // Si el vehículo tiene una intersección objetivo específica para giros
+            if (vehicle.getTargetIntersection() >= 0 && vehicle.getDirection() != Direction.STRAIGHT) {
+                int idx = Math.min(vehicle.getTargetIntersection(), VALID_INTERSECTIONS.length - 1);
+
+                return switch (idx) {
+                    case 0 -> westbound ? "ARRIBA" : "ABAJO";  // Intersección lateral izquierda (X=70)
+                    case 1 -> westbound ? "ARRIBA" : "ABAJO";  // Primera intersección central (X=390)
+                    case 2 -> westbound ? "ARRIBA" : "ABAJO";  // Segunda intersección central (X=690)
+                    case 3 -> westbound ? "ARRIBA" : "ABAJO";  // Intersección lateral derecha (X=1010)
+                    default -> westbound ? "ARRIBA" : "ABAJO";
+                };
+            }
+
+            // Para movimiento recto, usar el grupo estándar
+            return westbound ? "ARRIBA" : "ABAJO";
         } else {
             StartPoint sp = vehicle.getStartPoint();
             return switch (sp) {
-                case NORTH_L, NORTH_D -> "CalleIzq"; // Carriles norte -> sur (calle izquierda)
-                case SOUTH_L, SOUTH_D -> "CalleDer"; // Carriles sur -> norte (calle derecha)
-                case EAST, WEST -> "CalleDer";       // Valor por defecto para no-autopista
+                case NORTH_L, NORTH_D -> "CalleIzq";
+                case SOUTH_L, SOUTH_D -> "CalleDer";
+                case EAST, WEST -> "CalleDer";
             };
         }
     }
@@ -975,8 +991,8 @@ public class VehicleTask implements Runnable {
             // Si un vehículo está marcado en intersección o se encuentra dentro del área crítica, no es seguro
             if (insideBox || other.isInIntersection()) {
                 // Mejorado: verificamos la dirección relativa para ser más precisos
-                // Por ejemplo, si el otro vehículo se está alejando, podría ser seguro girar
-                
+                // Por ejemplo, si el otro vehículo se está alejando, podría ser seguro
+
                 // Calcular si el otro vehículo se está alejando o acercando a la intersección
                 boolean isMovingAway = false;
                 

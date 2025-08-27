@@ -26,8 +26,8 @@ public class TrafficSimulationController {
     private StartPoint selectedStartPoint = StartPoint.NORTH_L;
     private VehicleType selectedVehicleType = VehicleType.NORMAL;
     private Direction selectedDirection = Direction.STRAIGHT;
-    // Añadida variable para la intersección seleccionada
-    private int selectedIntersection = 0; // 0 = primera (X=390), 1 = segunda (X=690)
+    // Actualizado: ahora hay 4 intersecciones (0=x70, 1=x390, 2=x690, 3=x1010)
+    private int selectedIntersection = 1; // Por defecto la primera intersección central (X=390)
     private Label configLabel;
 
     private final TrafficLightGroup CalleIzqGroup = new TrafficLightGroup("CalleIzq");
@@ -38,9 +38,14 @@ public class TrafficSimulationController {
 
     private Map<String, TrafficLightGroup> trafficLightGroups;
 
-    // Array con nombres descriptivos de las intersecciones
-    // Solo dos intersecciones principales: X=390 y X=690 (correspondientes a VALID_INTERSECTIONS en VehicleTask)
-    private final String[] interseccionesDescripcion = {"primera (X=390)", "segunda (X=690)"};
+    // Actualizado: Array con nombres descriptivos de las 4 intersecciones
+    // Corresponde a VALID_INTERSECTIONS = {70, 390, 690, 1010} en VehicleTask
+    private final String[] interseccionesDescripcion = {
+            "lateral izquierda (X=70)",
+            "primera central (X=390)",
+            "segunda central (X=690)",
+            "lateral derecha (X=1010)"
+    };
 
     @FXML
     public void initialize() {
@@ -78,7 +83,7 @@ public class TrafficSimulationController {
         // Añadir información de la intersección seleccionada si es relevante
         if ((selectedStartPoint == StartPoint.EAST || selectedStartPoint == StartPoint.WEST) &&
                 selectedDirection != Direction.STRAIGHT) {
-            config += " | Intersección: " + (selectedIntersection == 0 ? "Primera" : "Segunda");
+            config += " | Intersección: " + interseccionesDescripcion[selectedIntersection];
         }
 
         return config;
@@ -107,9 +112,11 @@ public class TrafficSimulationController {
             case "VIzquierda"      -> selectedDirection = Direction.LEFT;
             case "VDerecha"        -> selectedDirection = Direction.RIGHT;
             case "U"               -> selectedDirection = Direction.U_TURN;
-            // Selección de intersección (nuevas opciones)
-            case "PrimeraInterseccion" -> selectedIntersection = 0;
-            case "SegundaInterseccion" -> selectedIntersection = 1;
+            // Actualizado: Selección de intersección (4 opciones)
+            case "InterseccionLateralIzq" -> selectedIntersection = 0;  // X=70
+            case "PrimeraInterseccion" -> selectedIntersection = 1;     // X=390
+            case "SegundaInterseccion" -> selectedIntersection = 2;     // X=690
+            case "InterseccionLateralDer" -> selectedIntersection = 3;  // X=1010
             default -> { /* ignorar */ }
         }
 
@@ -151,7 +158,7 @@ public class TrafficSimulationController {
         if (vehicle.isHighwayVehicle() && selectedDirection != Direction.STRAIGHT) {
             content = String.format(
                     "Tipo: %s%nPunto de salida: %s%nDirección: %s%nPosición inicial: (%.0f, %.0f)%n" +
-                            "Es vehículo de autopista: Sí%nGirará en la %s intersección",
+                            "Es vehículo de autopista: Sí%nGirará en la intersección %s",
                     selectedVehicleType,
                     selectedStartPoint,
                     selectedDirection,
@@ -199,11 +206,11 @@ public class TrafficSimulationController {
 
                 // Si no es recto, asignar una intersección para girar
                 if (dir != Direction.STRAIGHT) {
-                    // Para lotes aleatorios, seguimos seleccionando intersección aleatoria
-                    v.setTargetIntersection(rnd.nextInt(2));
-                    resumen.append(String.format("#%d -> AUTOPISTA | %s | Carril %s | Dir: %s | Girará en intersección %d%n",
+                    // Actualizado: Para lotes aleatorios, seleccionar entre las 4 intersecciones
+                    v.setTargetIntersection(rnd.nextInt(4));
+                    resumen.append(String.format("#%d -> AUTOPISTA | %s | Carril %s | Dir: %s | Girará en %s%n",
                             v.getId(), tipo.getDescription(), lane.getDescription(),
-                            dir.getDescription(), v.getTargetIntersection() + 1));
+                            dir.getDescription(), interseccionesDescripcion[v.getTargetIntersection()]));
                 } else {
                     // Para movimientos rectos, usar la lógica de salida existente
                     v.setTargetExit(rnd.nextInt(4));
@@ -284,22 +291,19 @@ public class TrafficSimulationController {
 
         // Dibujar calles verticales
         double[] verticalXs = {70, 390, 690, 1010};
-        // VALID_INTERSECTIONS en VehicleTask solo incluye 390 y 690
-        int[] mainIntersections = {1, 2}; // Índices 1 y 2 corresponden a X=390 y X=690
-        
+        // Actualizado: Todas las intersecciones ahora permiten giros
+        int[] mainIntersections = {0, 1, 2, 3}; // Todos los índices corresponden a intersecciones válidas
+
         for (int i = 0; i < verticalXs.length; i++) {
             double x = verticalXs[i];
             Rectangle calle = new Rectangle(x, topMargin, streetWidth, streetLength);
             calle.setFill(Color.GRAY);
             lienzo.getChildren().add(calle);
 
-            // Línea central amarilla para calles con semáforos (solo intersecciones principales)
-            boolean isMainIntersection = (i == 1 || i == 2);
-            if (isMainIntersection) {
-                double xLinea = x + streetWidth / 2;
-                drawSegmentedLine(xLinea, 0, xLinea, avenueY1, Color.YELLOW, 2, 30, 25);
-                drawSegmentedLine(xLinea, avenueY2 + avenueWidth, xLinea, height, Color.YELLOW, 2, 30, 25);
-            }
+            // Línea central amarilla para todas las calles (ahora todas tienen semáforos)
+            double xLinea = x + streetWidth / 2;
+            drawSegmentedLine(xLinea, 0, xLinea, avenueY1, Color.YELLOW, 2, 30, 25);
+            drawSegmentedLine(xLinea, avenueY2 + avenueWidth, xLinea, height, Color.YELLOW, 2, 30, 25);
         }
 
         // Dibujar avenidas
@@ -336,20 +340,24 @@ public class TrafficSimulationController {
         CalleDerGroup.addTrafficLight(semaforoA3);
         CalleDerGroup.addTrafficLight(semaforoA4);
 
+        TrafficLight semaforoUp0 = new TrafficLight(45, 210, 270, "UP0");
         TrafficLight semaforoUp1 = new TrafficLight(360, 210, 270, "UP1");
         TrafficLight semaforoUp2 = new TrafficLight(660, 210, 270, "UP2");
         arribaGroup.addTrafficLight(semaforoUp1);
         arribaGroup.addTrafficLight(semaforoUp2);
+        arribaGroup.addTrafficLight(semaforoUp0);
 
         TrafficLight semaforoDown1 = new TrafficLight(500, 410, 90, "DOWN1");
         TrafficLight semaforoDown2 = new TrafficLight(800, 410, 90, "DOWN2");
+        TrafficLight semaforoDown0 = new TrafficLight(1115, 410, 90, "DOWN0");
         abajoGroup.addTrafficLight(semaforoDown1);
         abajoGroup.addTrafficLight(semaforoDown2);
+        abajoGroup.addTrafficLight(semaforoDown0);
 
         lienzo.getChildren().addAll(
                 semaforoA1.getNode(), semaforoA2.getNode(), semaforoA3.getNode(), semaforoA4.getNode(),
                 semaforoUp1.getNode(), semaforoUp2.getNode(),
-                semaforoDown1.getNode(), semaforoDown2.getNode()
+                semaforoDown1.getNode(), semaforoDown2.getNode(),semaforoDown0.getNode(),semaforoUp0.getNode()
         );
 
         // Etiquetas de avenidas
@@ -370,7 +378,14 @@ public class TrafficSimulationController {
         // Indicadores de carriles de autopista para debug
         drawLaneIndicators();
 
-        // Agregar etiquetas para las intersecciones donde se puede girar
+        // Actualizado: Agregar etiquetas para las 4 intersecciones donde se puede girar
+        Label inter0 = new Label("0");
+        inter0.setTextFill(Color.WHITE);
+        inter0.setFont(Font.font("Arial", FontWeight.BOLD, 16));
+        inter0.setStyle("-fx-background-color: rgba(255, 0, 0, 0.7); -fx-padding: 4; -fx-background-radius: 10;");
+        inter0.setLayoutX(110);
+        inter0.setLayoutY(180);
+
         Label inter1 = new Label("1");
         inter1.setTextFill(Color.WHITE);
         inter1.setFont(Font.font("Arial", FontWeight.BOLD, 16));
@@ -385,7 +400,14 @@ public class TrafficSimulationController {
         inter2.setLayoutX(730);
         inter2.setLayoutY(180);
 
-        lienzo.getChildren().addAll(inter1, inter2);
+        Label inter3 = new Label("3");
+        inter3.setTextFill(Color.WHITE);
+        inter3.setFont(Font.font("Arial", FontWeight.BOLD, 16));
+        inter3.setStyle("-fx-background-color: rgba(255, 0, 0, 0.7); -fx-padding: 4; -fx-background-radius: 10;");
+        inter3.setLayoutX(1050);
+        inter3.setLayoutY(180);
+
+        lienzo.getChildren().addAll(inter0, inter1, inter2, inter3);
     }
 
     private void drawLaneIndicators() {
@@ -407,16 +429,21 @@ public class TrafficSimulationController {
         double x = startX;
         double endX = startX + totalLength;
 
-        double[][] exclusionRanges = new double[2][2];
-        for (int i = 1; i <= 2; i++) {
-            exclusionRanges[i - 1][0] = verticalXs[i];
-            exclusionRanges[i - 1][1] = verticalXs[i] + streetWidth;
+        // Actualizado: Ahora excluir las 4 intersecciones
+        double[][] exclusionRanges = new double[4][2];
+        for (int i = 0; i < 4; i++) {
+            exclusionRanges[i][0] = verticalXs[i];
+            exclusionRanges[i][1] = verticalXs[i] + streetWidth;
         }
+
         double[] ranges = new double[]{
                 x, exclusionRanges[0][0],
                 exclusionRanges[0][1], exclusionRanges[1][0],
-                exclusionRanges[1][1], endX
+                exclusionRanges[1][1], exclusionRanges[2][0],
+                exclusionRanges[2][1], exclusionRanges[3][0],
+                exclusionRanges[3][1], endX
         };
+
         for (int i = 0; i < ranges.length; i += 2) {
             double segStart = ranges[i];
             double segEnd = ranges[i + 1];
@@ -439,16 +466,24 @@ public class TrafficSimulationController {
         double x = startX;
         double endX = startX + totalLength;
 
+        // Actualizado: Excluir las 4 intersecciones
+        double leftInter0 = verticalXs[0];
+        double rightInter0 = verticalXs[0] + streetWidth;
         double leftInter1 = verticalXs[1];
         double rightInter1 = verticalXs[1] + streetWidth;
         double leftInter2 = verticalXs[2];
         double rightInter2 = verticalXs[2] + streetWidth;
+        double leftInter3 = verticalXs[3];
+        double rightInter3 = verticalXs[3] + streetWidth;
 
         double[] ranges = new double[]{
-                x, leftInter1,
+                x, leftInter0,
+                rightInter0, leftInter1,
                 rightInter1, leftInter2,
-                rightInter2, endX
+                rightInter2, leftInter3,
+                rightInter3, endX
         };
+
         for (int i = 0; i < ranges.length; i += 2) {
             double segStart = ranges[i];
             double segEnd = ranges[i + 1];
@@ -484,3 +519,7 @@ public class TrafficSimulationController {
         }
     }
 }
+
+
+
+

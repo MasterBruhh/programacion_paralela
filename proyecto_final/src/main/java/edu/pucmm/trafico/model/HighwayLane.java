@@ -7,14 +7,14 @@ package edu.pucmm.trafico.model;
 public enum HighwayLane {
     // Avenida Superior (Y=210 a Y=310, va hacia la izquierda/oeste)
     // Dividimos 100px entre 3 carriles = ~33.33px por carril
-    EAST_RIGHT(1160, 226.67, "Oeste-Izquierdo", 1, true),     // Y=210 + 16.67
-    EAST_CENTER(1160, 260, "Oeste-Centro", 2, true),         // Y=210 + 50 (centro)
-    EAST_LEFT(1160, 293.33, "Oeste-Derecho", 3, true),      // Y=210 + 83.33
+    EAST_RIGHT(1020, 226.67, "Oeste-Izquierdo", 1, true),     // Y=210 + 16.67
+    EAST_CENTER(1020, 260, "Oeste-Centro", 2, true),         // Y=210 + 50 (centro)
+    EAST_LEFT(1020, 293.33, "Oeste-Derecho", 3, true),      // Y=210 + 83.33
 
     // Avenida Inferior (Y=310 a Y=410, va hacia la derecha/este)
-    WEST_LEFT(0, 326.67, "Este-Izquierdo", 1, false),        // Y=310 + 16.67
-    WEST_CENTER(0, 360, "Este-Centro", 2, false),            // Y=310 + 50 (centro)
-    WEST_RIGHT(0, 393.33, "Este-Derecho", 3, false);         // Y=310 + 83.33
+    WEST_LEFT(140, 326.67, "Este-Izquierdo", 1, false),        // Y=310 + 16.67
+    WEST_CENTER(140, 360, "Este-Centro", 2, false),            // Y=310 + 50 (centro)
+    WEST_RIGHT(140, 393.33, "Este-Derecho", 3, false);         // Y=310 + 83.33
 
     private final double startX;
     private final double startY;

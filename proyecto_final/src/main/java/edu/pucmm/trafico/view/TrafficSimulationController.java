@@ -3,6 +3,7 @@ package edu.pucmm.trafico.view;
 import edu.pucmm.trafico.core.*;
 import edu.pucmm.trafico.model.*;
 import edu.pucmm.trafico.concurrent.*;
+import javafx.application.Platform;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
@@ -49,6 +50,16 @@ public class TrafficSimulationController {
 
     @FXML
     public void initialize() {
+        Platform.runLater(() -> {
+            // Asegurar que el MenuBar siempre esté al frente
+            MenuBar menuBar = (MenuBar) lienzo.getScene().getRoot().lookup(".menu-bar");
+            if (menuBar != null) {
+                menuBar.toFront();
+                menuBar.setMouseTransparent(false);
+            }
+        });
+
+        drawRoadsWithLanes();
         drawRoadsWithLanes();
 
         trafficLightGroups = new HashMap<>();
@@ -72,7 +83,7 @@ public class TrafficSimulationController {
         configLabel.setTextFill(Color.WHITE);
         configLabel.setStyle("-fx-background-color: rgba(0, 0, 0, 0.7); -fx-padding: 10; -fx-background-radius: 5;");
         configLabel.setLayoutX(10);
-        configLabel.setLayoutY(10);
+        configLabel.setLayoutY(25);
 
         lienzo.getChildren().add(configLabel);
     }

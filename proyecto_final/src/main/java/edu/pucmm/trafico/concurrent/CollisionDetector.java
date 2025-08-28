@@ -4,11 +4,12 @@ import edu.pucmm.trafico.model.*;
 import java.util.Collection;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.logging.Logger;
 
 /**
  * Sistema avanzado de detección de colisiones para vehículos de calle y autopista.
- * Implementa algoritmos de predicción y prevención de colisiones.
  */
 public class CollisionDetector {
     private static final Logger logger = Logger.getLogger(CollisionDetector.class.getName());
@@ -16,17 +17,31 @@ public class CollisionDetector {
     // Configuración de distancias
     private static final double VEHICLE_RADIUS = 15.0;
     private static final double SAFETY_MARGIN = 10.0;
-    private static final double STREET_MIN_DISTANCE = 40.0;
-    private static final double HIGHWAY_MIN_DISTANCE = 60.0;
     private static final double EMERGENCY_MIN_DISTANCE = 80.0;
     private static final double LANE_WIDTH = 30.0;
     private static final double PREDICTION_TIME = 2.0; // segundos
+
+    // Umbrales para detección de vehículos adelante
+    private static final double AHEAD_DETECTION_ANGLE = 30.0; // grados
+
+    // Mapa para seguimiento de vehículos bloqueados
+    private final Map<Long, Integer> stuckVehicles = new HashMap<>();
+    private static final double AHEAD_MAX_LATERAL_DISTANCE = 25.0; // Reducido de 30
+    private static final double STREET_MIN_DISTANCE = 30.0;        // Reducido de 40
+    private static final double HIGHWAY_MIN_DISTANCE = 45.0;       // Reducido de 60
+    private static final int STUCK_THRESHOLD = 6;                 // Reducido de 15
 
     /**
      * Verifica si un vehículo puede moverse a una posición sin colisionar
      */
     public boolean canMove(Vehicle vehicle, double nextX, double nextY,
                            Collection<Vehicle> activeVehicles) {
+
+        // NUEVO: Verificar si el vehículo está "atascado" por mucho tiempo
+        if (isVehicleStuck(vehicle)) {
+            // Permitir movimiento con radio de colisión reducido para vehículos atascados
+            return canMoveWithReducedCollisionRadius(vehicle, nextX, nextY, activeVehicles);
+        }
 
         // Verificación especial para cambios de carril
         if (vehicle.isChangingLane()) {
@@ -52,6 +67,9 @@ public class CollisionDetector {
             if (distance < minDistance) {
                 // Verificar si están en trayectorias que se cruzan
                 if (willCollide(vehicle, nextX, nextY, other)) {
+                    // NUEVO: Incrementar contador de bloqueo
+                    incrementStuckCounter(vehicle);
+
                     logger.fine("Colisión detectada: Vehículo " + vehicle.getId() +
                             " con " + other.getId() + " a distancia " + distance);
                     return false;
@@ -61,8 +79,46 @@ public class CollisionDetector {
             // Predicción de colisión futura
             if (vehicle.isHighwayVehicle() && other.isHighwayVehicle()) {
                 if (predictHighwayCollision(vehicle, nextX, nextY, other)) {
+                    // NUEVO: Incrementar contador de bloqueo
+                    incrementStuckCounter(vehicle);
                     return false;
                 }
+            }
+        }
+
+        // NUEVO: Resetear contador de bloqueo si puede moverse
+        resetStuckCounter(vehicle);
+        return true;
+    }
+
+    /**
+     * NUEVO MÉTODO: Verifica movimiento con radio de colisión reducido para "desatascar"
+     */
+    private boolean canMoveWithReducedCollisionRadius(Vehicle vehicle, double nextX, double nextY,
+                                                      Collection<Vehicle> activeVehicles) {
+        // Usamos una distancia de seguridad reducida para permitir el paso
+        Integer stuckCount = stuckVehicles.get(vehicle.getId());
+        double reductionFactor;
+
+        if (stuckCount > 15) {
+            reductionFactor = 0.2; // 20% - muy agresivo
+        } else if (stuckCount > 10) {
+            reductionFactor = 0.3; // 30%
+        } else {
+            reductionFactor = 0.5; // 50%
+        }
+
+        for (Vehicle other : activeVehicles) {
+            if (other.getId() == vehicle.getId() || !other.isActive()) continue;
+
+            // Distancia mínima reducida
+            double reducedDistance = calculateMinDistance(vehicle, other) * reductionFactor;
+
+            // Verificar colisión con radio reducido
+            double distance = calculateDistance(nextX, nextY, other.getX(), other.getY());
+            if (distance < reducedDistance) {
+                // No permitir pasar si están demasiado cerca incluso con radio reducido
+                return false;
             }
         }
 
@@ -70,7 +126,30 @@ public class CollisionDetector {
     }
 
     /**
-     * Detecta vehículos adelante en el mismo carril o trayectoria
+     * NUEVO MÉTODO: Verifica si un vehículo está atascado durante mucho tiempo
+     */
+    private boolean isVehicleStuck(Vehicle vehicle) {
+        Integer stuckCount = stuckVehicles.get(vehicle.getId());
+        return stuckCount != null && stuckCount > STUCK_THRESHOLD;
+    }
+
+    /**
+     * NUEVO MÉTODO: Incrementa contador de bloqueo para un vehículo
+     */
+    private void incrementStuckCounter(Vehicle vehicle) {
+        int count = stuckVehicles.getOrDefault(vehicle.getId(), 0);
+        stuckVehicles.put(vehicle.getId(), count + 1);
+    }
+
+    /**
+     * NUEVO MÉTODO: Resetea contador de bloqueo para un vehículo
+     */
+    private void resetStuckCounter(Vehicle vehicle) {
+        stuckVehicles.put(vehicle.getId(), 0);
+    }
+
+    /**
+     * Detecta vehículos adelante en el mismo carril o trayectoria.
      */
     public VehicleAheadInfo detectVehicleAhead(Vehicle vehicle,
                                                Collection<Vehicle> activeVehicles) {
@@ -80,14 +159,39 @@ public class CollisionDetector {
         for (Vehicle other : activeVehicles) {
             if (other.getId() == vehicle.getId() || !other.isActive()) continue;
 
-            // Verificar si están en la misma trayectoria
+            // Primero verificar si están en la misma trayectoria
             if (areInSamePath(vehicle, other)) {
-                // Verificar si está adelante
+                // Luego verificar si está adelante
                 if (isVehicleAhead(vehicle, other)) {
+                    // Calcular distancia solo para vehículos confirmados adelante
                     double distance = calculateDistance(
                             vehicle.getX(), vehicle.getY(),
                             other.getX(), other.getY()
                     );
+
+                    // MODIFICADO: Usar distinción por tipo de vehículo para determinar distancia lateral máxima
+                    double lateralThreshold = AHEAD_MAX_LATERAL_DISTANCE;
+                    if (vehicle.getType() == VehicleType.HEAVY || vehicle.getType() == VehicleType.PUBLIC_TRANSPORT) {
+                        lateralThreshold *= 1.5; // 50% más para vehículos grandes
+                    }
+
+                    // Añadir verificación adicional: para autopistas, comprobar la desviación lateral máxima
+                    if (vehicle.isHighwayVehicle() && other.isHighwayVehicle()) {
+                        double lateralDistance = Math.abs(vehicle.getY() - other.getY());
+                        if (lateralDistance > lateralThreshold) {
+                            continue; // Ignorar si está demasiado desviado lateralmente
+                        }
+                    }
+
+                    // Para calles, hacer verificación similar con X
+                    if (!vehicle.isHighwayVehicle() && !other.isHighwayVehicle()) {
+                        if (isVerticalStreet(vehicle.getStartPoint())) {
+                            double lateralDistance = Math.abs(vehicle.getX() - other.getX());
+                            if (lateralDistance > lateralThreshold) {
+                                continue; // Ignorar si está demasiado desviado lateralmente
+                            }
+                        }
+                    }
 
                     if (distance < closestDistance) {
                         closestDistance = distance;
@@ -125,24 +229,36 @@ public class CollisionDetector {
     }
 
     /**
-     * Calcula la velocidad segura basada en el entorno
+     * Calcula la velocidad segura basada en el entorno.
      */
     public double calculateSafeSpeed(double currentSpeed, double distanceAhead,
                                      boolean isHighway) {
+        // Distancias mínimas según tipo de vía
         double minDistance = isHighway ? HIGHWAY_MIN_DISTANCE : STREET_MIN_DISTANCE;
         double stopDistance = minDistance * 0.5;
+        double slowDistance = minDistance * 2.0; // Ampliamos la zona de desaceleración
 
+        // Si está muy cerca, detenerse completamente
         if (distanceAhead < stopDistance) {
-            return 0; // Detenerse completamente
-        } else if (distanceAhead < minDistance) {
-            // Reducir velocidad proporcionalmente
-            double factor = (distanceAhead - stopDistance) / (minDistance - stopDistance);
-            return currentSpeed * factor * 0.5; // Factor adicional de seguridad
-        } else if (distanceAhead < minDistance * 1.5) {
-            // Reducción suave
-            return currentSpeed * 0.8;
+            return 0.0;
+        }
+        // Si está cerca pero no demasiado, reducir la velocidad proporcionalmente
+        else if (distanceAhead < minDistance) {
+            // Reducción más suave con una curva que evita cambios bruscos
+            double ratio = (distanceAhead - stopDistance) / (minDistance - stopDistance);
+            // Usamos una curva suave (exponencial) para cambio gradual
+            double smoothFactor = Math.pow(ratio, 1.5); // Exponente 1.5 para suavizar
+            return currentSpeed * smoothFactor * 0.7; // Menos agresivo: 0.7 en lugar de 0.5
+        }
+        // Si está a distancia media, reducción ligera
+        else if (distanceAhead < slowDistance) {
+            double ratio = (distanceAhead - minDistance) / (slowDistance - minDistance);
+            // Transición suave entre reducción ligera y velocidad normal
+            double speedFactor = 0.8 + (0.2 * ratio);
+            return currentSpeed * speedFactor;
         }
 
+        // Si está lejos, mantener velocidad normal
         return currentSpeed;
     }
 
@@ -309,69 +425,142 @@ public class CollisionDetector {
 
     /**
      * Calcula la distancia mínima requerida entre dos vehículos
+     * MODIFICADO: Mejor ajuste por tipo de vehículo
      */
     private double calculateMinDistance(Vehicle v1, Vehicle v2) {
-        double baseDistance = v1.isHighwayVehicle() ?
-                HIGHWAY_MIN_DISTANCE : STREET_MIN_DISTANCE;
+        double baseDistance = v1.isHighwayVehicle() ? HIGHWAY_MIN_DISTANCE : STREET_MIN_DISTANCE;
 
-        // Ajustar por tipo de vehículo
         if (v1.getType() == VehicleType.EMERGENCY || v2.getType() == VehicleType.EMERGENCY) {
             baseDistance = EMERGENCY_MIN_DISTANCE;
         } else if (v1.getType() == VehicleType.HEAVY || v2.getType() == VehicleType.HEAVY) {
-            baseDistance *= 1.3;
+            baseDistance *= 1.1; // Reducido de 1.4 a 1.1
+        } else if (v1.getType() == VehicleType.PUBLIC_TRANSPORT || v2.getType() == VehicleType.PUBLIC_TRANSPORT) {
+            baseDistance *= 1.05; // Reducido de 1.3 a 1.05
         }
 
-        // Ajustar por velocidad
-        double speedFactor = 1.0 + (Math.max(v1.getSpeed(), v2.getSpeed()) / 100.0) * 0.5;
+        double speedFactor = 1.0 + (Math.max(v1.getSpeed(), v2.getSpeed()) / 100.0) * 0.15; // Reducido de 0.3 a 0.15
 
         return baseDistance * speedFactor;
     }
 
     /**
-     * Verifica si dos vehículos están en la misma trayectoria
+     * NUEVO MÉTODO: Obtiene un factor de tamaño para cada tipo de vehículo
+     */
+    private double getVehicleSizeFactor(Vehicle vehicle) {
+        switch (vehicle.getType()) {
+            case NORMAL: return 1.0;
+            case EMERGENCY: return 1.2;
+            case PUBLIC_TRANSPORT: return 1.3;
+            case HEAVY: return 1.4;
+            default: return 1.0;
+        }
+    }
+
+    /**
+     * Verifica si dos vehículos están en la misma trayectoria.
      */
     private boolean areInSamePath(Vehicle v1, Vehicle v2) {
         // Vehículos de autopista
         if (v1.isHighwayVehicle() && v2.isHighwayVehicle()) {
             // Mismo carril y misma dirección
-            return v1.getCurrentLane() == v2.getCurrentLane() &&
-                    (v1.getHighwayLane().isWestbound() == v2.getHighwayLane().isWestbound());
+            boolean sameDirection = v1.getHighwayLane().isWestbound() == v2.getHighwayLane().isWestbound();
+            boolean sameLane = v1.getCurrentLane() == v2.getCurrentLane();
+
+            // Si están en el mismo carril lógico y misma dirección
+            return sameLane && sameDirection;
         }
 
         // Vehículos de calle
         if (!v1.isHighwayVehicle() && !v2.isHighwayVehicle()) {
-            // Mismo punto de inicio = mismo carril (NORTH_L != NORTH_D)
-            return v1.getStartPoint() == v2.getStartPoint();
+            // Verificar que estén en el mismo carril (misma calle) y misma dirección
+            boolean sameStreet = v1.getStartPoint() == v2.getStartPoint();
+
+            // MODIFICADO: Usar umbral basado en tipo de vehículo
+            double lateralThreshold = AHEAD_MAX_LATERAL_DISTANCE;
+            if (v1.getType() == VehicleType.HEAVY || v1.getType() == VehicleType.PUBLIC_TRANSPORT ||
+                    v2.getType() == VehicleType.HEAVY || v2.getType() == VehicleType.PUBLIC_TRANSPORT) {
+                lateralThreshold *= 1.5;
+            }
+
+            // Verificar si están alineados
+            if (isVerticalStreet(v1.getStartPoint())) {
+                // Para calles verticales, comprobar alineación en X
+                double xDiff = Math.abs(v1.getX() - v2.getX());
+                return sameStreet && xDiff < lateralThreshold;
+            } else {
+                // Para calles horizontales, comprobar alineación en Y
+                double yDiff = Math.abs(v1.getY() - v2.getY());
+                return sameStreet && yDiff < lateralThreshold;
+            }
         }
 
         return false;
     }
 
     /**
-     * Verifica si un vehículo está adelante de otro
+     * Verifica si un vehículo está adelante de otro.
      */
     private boolean isVehicleAhead(Vehicle current, Vehicle other) {
         if (current.isHighwayVehicle() && other.isHighwayVehicle()) {
             // En autopista, considerar dirección del carril
             boolean westbound = current.getHighwayLane().isWestbound();
+
+            // MODIFICADO: Usar umbral basado en tipo de vehículo
+            double lateralThreshold = AHEAD_MAX_LATERAL_DISTANCE;
+            if (current.getType() == VehicleType.HEAVY || current.getType() == VehicleType.PUBLIC_TRANSPORT ||
+                    other.getType() == VehicleType.HEAVY || other.getType() == VehicleType.PUBLIC_TRANSPORT) {
+                lateralThreshold *= 1.5;
+            }
+
             if (westbound) {
-                return other.getX() < current.getX(); // Hacia oeste (izquierda)
+                return other.getX() < current.getX() &&
+                        Math.abs(other.getY() - current.getY()) < lateralThreshold;
             } else {
-                return other.getX() > current.getX(); // Hacia este (derecha)
+                return other.getX() > current.getX() &&
+                        Math.abs(other.getY() - current.getY()) < lateralThreshold;
             }
         }
 
         if (!current.isHighwayVehicle() && !other.isHighwayVehicle()) {
+            // MODIFICADO: Usar umbral basado en tipo de vehículo
+            double lateralThreshold = AHEAD_MAX_LATERAL_DISTANCE;
+            if (current.getType() == VehicleType.HEAVY || current.getType() == VehicleType.PUBLIC_TRANSPORT ||
+                    other.getType() == VehicleType.HEAVY || other.getType() == VehicleType.PUBLIC_TRANSPORT) {
+                lateralThreshold *= 1.5;
+            }
+
             // En calles, considerar punto de inicio (soporte L/D)
-            return switch (current.getStartPoint()) {
-                case NORTH_L, NORTH_D -> other.getY() > current.getY(); // Hacia sur (abajo)
-                case SOUTH_L, SOUTH_D -> other.getY() < current.getY(); // Hacia norte (arriba)
-                case EAST -> other.getX() < current.getX();             // Hacia oeste (izquierda)
-                case WEST -> other.getX() > current.getX();             // Hacia este (derecha)
-            };
+            if (isVerticalStreet(current.getStartPoint())) {
+                // Para calles verticales, también verificar alineación en X
+                double xDiff = Math.abs(current.getX() - other.getX());
+                boolean isAligned = xDiff < lateralThreshold;
+
+                if (isNorthEntry(current.getStartPoint())) {
+                    return other.getY() > current.getY() && isAligned; // Hacia sur (abajo)
+                } else {
+                    return other.getY() < current.getY() && isAligned; // Hacia norte (arriba)
+                }
+            } else {
+                // Para calles horizontales, verificar alineación en Y
+                double yDiff = Math.abs(current.getY() - other.getY());
+                boolean isAligned = yDiff < lateralThreshold;
+
+                if (current.getStartPoint() == StartPoint.EAST) {
+                    return other.getX() < current.getX() && isAligned; // Hacia oeste (izquierda)
+                } else {
+                    return other.getX() > current.getX() && isAligned; // Hacia este (derecha)
+                }
+            }
         }
 
         return false;
+    }
+
+    /**
+     * Determina si una calle es vertical (norte-sur) basado en su StartPoint
+     */
+    private boolean isVerticalStreet(StartPoint sp) {
+        return isNorthEntry(sp) || isSouthEntry(sp);
     }
 
     /**

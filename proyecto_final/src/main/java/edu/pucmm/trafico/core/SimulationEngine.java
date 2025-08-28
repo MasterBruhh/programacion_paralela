@@ -27,7 +27,10 @@ public class SimulationEngine {
         this.canvas = canvas;
         this.running = new AtomicBoolean(false);
     }
-    
+    public java.util.Collection<Vehicle> getActiveVehicles() {
+        return lifecycleManager.getAllActiveVehicles();
+    }
+
     public void start() {
         if (running.compareAndSet(false, true)) {
             logger.info("Simulación iniciada - Fase de creación y movimiento inicial");

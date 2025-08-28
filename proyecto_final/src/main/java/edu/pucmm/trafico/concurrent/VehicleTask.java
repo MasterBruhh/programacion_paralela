@@ -105,8 +105,20 @@ public class VehicleTask implements Runnable {
         double dy = postTurnTargetY - vehicle.getY();
         double distance = Math.hypot(dx, dy);
 
-        // Si ya llegamos al punto objetivo, cambiar a EXITING
-        if (distance < 5.0) {
+        // Si ya llegamos al punto objetivo o si es un vehículo de emergencia
+        // que ha avanzado lo suficiente (al menos el 80% de la distancia), cambiar a EXITING
+        boolean isEmergency = vehicle.getType() == VehicleType.EMERGENCY;
+        boolean isUTurn = vehicle.getDirection() == Direction.U_TURN && reincorporatedAfterUTurn;
+        
+        // Para vehículos normales: llegada exacta. Para emergencias post-U-turn: aproximada
+        if (distance < 5.0 || (isEmergency && isUTurn && distance < 30.0)) {
+            // Si es emergencia en U-turn y llegamos al 85% del camino, cambiar a APPROACHING
+            // para seguir el recorrido normal (en lugar de EXITING)
+            if (isEmergency && isUTurn) {
+                currentState = State.APPROACHING;
+                return;
+            }
+            
             currentState = State.EXITING;
             return;
         }
@@ -170,6 +182,21 @@ public class VehicleTask implements Runnable {
 
         // Verificar colisiones
         Collection<Vehicle> allVehicles = lifecycleManager.getAllActiveVehicles();
+        
+        // Comportamiento especial para vehículos de emergencia después de un U-turn
+        boolean isEmergencyAfterUTurn = vehicle.getType() == VehicleType.EMERGENCY && 
+                                       reincorporatedAfterUTurn && 
+                                       vehicle.getDirection() == Direction.U_TURN;
+                                       
+        if (isEmergencyAfterUTurn) {
+            // Los vehículos de emergencia tienen prioridad absoluta después de un U-turn
+            // Intentamos moverlos incluso si hay obstáculos, aplicando una fuerza de empuje
+            updateVehiclePosition(newX, newY);
+            stuckCounter = 0;
+            return;
+        }
+        
+        // Comportamiento normal para otros vehículos
         if (!collisionDetector.canMove(vehicle, newX, newY, allVehicles)) {
             stuckCounter++;
 
@@ -877,17 +904,37 @@ public class VehicleTask implements Runnable {
                 controlY2 = endY + (westbound ? 60 : -60);  // Aumentado de 50 a 60
             } else { // U_TURN - Mejoras significativas
                 // Puntos de control más alejados para curva más amplia
-                controlX1 = startX + (westbound ? -70 : 70);  // Aumentado de 50 a 70
-                controlY1 = startY + (westbound ? 80 : -80);  // Aumentado de 50 a 80
-                controlX2 = endX - (westbound ? 70 : -70);    // Aumentado de 50 a 70
-                controlY2 = endY - (westbound ? 30 : -30);    // Nuevo ajuste para suavizar
+                
+                // Para vehículos de emergencia, hacemos una curva más ancha y suave
+                if (vehicle.getType() == VehicleType.EMERGENCY) {
+                    // Ampliar puntos de control para emergencias
+                    controlX1 = startX + (westbound ? -90 : 90);  // Aumentado para emergencias
+                    controlY1 = startY + (westbound ? 100 : -100); // Más alejado
+                    controlX2 = endX - (westbound ? 90 : -90);    // Aumentado para emergencias
+                    controlY2 = endY - (westbound ? 40 : -40);    // Ajuste para suavizar
+                } else {
+                    // Vehículos normales mantienen los valores anteriores
+                    controlX1 = startX + (westbound ? -70 : 70);  // Aumentado de 50 a 70
+                    controlY1 = startY + (westbound ? 80 : -80);  // Aumentado de 50 a 80
+                    controlX2 = endX - (westbound ? 70 : -70);    // Aumentado de 50 a 70
+                    controlY2 = endY - (westbound ? 30 : -30);    // Nuevo ajuste para suavizar
+                }
             }
 
             path.getElements().add(new CubicCurveTo(
                     controlX1, controlY1, controlX2, controlY2, endX, endY));
 
-            // Animar giro - Aumentado tiempo para U-turns
-            double animationDuration = (vehicle.getDirection() == Direction.U_TURN) ? 2.5 : 2.0;
+            // Animar giro - Aumentado tiempo para U-turns y vehículos de emergencia
+            double animationDuration;
+            if (vehicle.getDirection() == Direction.U_TURN) {
+                if (vehicle.getType() == VehicleType.EMERGENCY) {
+                    animationDuration = 2.0; // Más rápido para emergencias en U-turn
+                } else {
+                    animationDuration = 2.5; // Tiempo normal para U-turns
+                }
+            } else {
+                animationDuration = 2.0; // Tiempo normal para otros giros
+            }
             PathTransition transition = new PathTransition(Duration.seconds(animationDuration), path, node);
             transition.setInterpolator(Interpolator.EASE_BOTH);
 
@@ -939,8 +986,14 @@ public class VehicleTask implements Runnable {
                         uturnWestboundAfter = true;
                     }
                     reincorporatedAfterUTurn = true;
-                    // Ajustar una pequeña proyección inicial para evitar quedarse dentro de la zona de giro
-                    postTurnTargetX = endX + (uturnWestboundAfter ? -POST_TURN_DISTANCE : POST_TURN_DISTANCE);
+                    
+                    // Distancia de proyección ajustada para emergencias (mayor velocidad, distancia más larga)
+                    double projectionDistance = vehicle.getType() == VehicleType.EMERGENCY ? 
+                        POST_TURN_DISTANCE * 1.5 : POST_TURN_DISTANCE;
+                        
+                    // Ajustar una proyección inicial para evitar quedarse dentro de la zona de giro
+                    // Dirección contraria a la original según el U-turn
+                    postTurnTargetX = endX + (uturnWestboundAfter ? -projectionDistance : projectionDistance);
                     postTurnTargetY = endY;
                 } else {
                     // Caso por defecto (nunca debería llegar aquí)
@@ -954,7 +1007,18 @@ public class VehicleTask implements Runnable {
                     vehicle.updatePosition(endX, endY);
                     // Reiniciar banderas de semáforos para nuevo sentido
                     hasCrossedLastLight = false;
-                    currentState = State.APPROACHING; // Volver a movimiento normal respetando semáforos
+                    
+                    // Para vehículos de emergencia, aseguramos una transición más suave 
+                    // después del giro en U
+                    if (vehicle.getType() == VehicleType.EMERGENCY) {
+                        // Velocidad aumentada para vehículos de emergencia en post-giro
+                        postTurnSpeed = 6.0; // Más rápido que la velocidad estándar
+                        // Usamos POST_TURN para tener más control sobre el movimiento
+                        currentState = State.POST_TURN;
+                    } else {
+                        // Para vehículos normales, volver a movimiento estándar
+                        currentState = State.APPROACHING;
+                    }
                 } else {
                     // Mantener comportamiento anterior para otros giros
                     currentState = State.POST_TURN;

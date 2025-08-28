@@ -14,12 +14,6 @@
             <menus>
                 <Menu mnemonicParsing="false" text="Punto de Salida">
                     <items>
-                        <!-- Calles verticales: norte (izquierda/derecha) y sur (izquierda/derecha) -->
-                        <MenuItem id="Arriba Izquierda" mnemonicParsing="false" onAction="#handleConfiguracion" text="Arriba Izquierda"/>
-                        <MenuItem id="Arriba Derecha"  mnemonicParsing="false" onAction="#handleConfiguracion" text="Arriba Derecha"/>
-                        <MenuItem id="Abajo Izquierda" mnemonicParsing="false" onAction="#handleConfiguracion" text="Abajo Izquierda"/>
-                        <MenuItem id="Abajo Derecha"   mnemonicParsing="false" onAction="#handleConfiguracion" text="Abajo Derecha"/>
-                        <!-- Entradas de autopista (oeste/este) -->
                         <MenuItem id="Izquierda" mnemonicParsing="false" onAction="#handleConfiguracion" text="Izquierda"/>
                         <MenuItem id="Derecha"   mnemonicParsing="false" onAction="#handleConfiguracion" text="Derecha"/>
                     </items>

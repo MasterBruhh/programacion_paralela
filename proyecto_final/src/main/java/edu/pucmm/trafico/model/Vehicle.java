@@ -115,19 +115,19 @@ public class Vehicle {
                 this.maxSpeed = isHighwayVehicle ? 120.0 : 70.0;
                 this.speed = maxSpeed * 0.8;
                 this.acceleration = 5.0;
-                yield new VehicleCharacteristics(Color.RED, 12.0);
+                yield new VehicleCharacteristics(Color.RED, 10.0);
             }
             case PUBLIC_TRANSPORT -> {
                 this.maxSpeed = isHighwayVehicle ? 80.0 : 50.0;
                 this.speed = maxSpeed * 0.7;
                 this.acceleration = 2.0;
-                yield new VehicleCharacteristics(Color.ORANGE, 18.0);
+                yield new VehicleCharacteristics(Color.ORANGE, 10.0);
             }
             case HEAVY -> {
                 this.maxSpeed = isHighwayVehicle ? 70.0 : 40.0;
                 this.speed = maxSpeed * 0.6;
                 this.acceleration = 1.5;
-                yield new VehicleCharacteristics(Color.DARKGRAY, 20.0);
+                yield new VehicleCharacteristics(Color.DARKGRAY, 10.0);
             }
             default -> { // NORMAL
                 this.maxSpeed = isHighwayVehicle ? 100.0 : 60.0;

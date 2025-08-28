@@ -60,6 +60,14 @@ public class VehicleTask implements Runnable {
     private volatile boolean isAnimating = false;
     private volatile boolean hasCrossedLastLight = false;
 
+    // --- Mejora: Reincorporación tras U-TURN ---
+    // Cuando un vehículo de autopista realiza una vuelta en U debe reincorporarse a la avenida
+    // opuesta y seguir respetando los semáforos como si circulara normalmente en el nuevo sentido.
+    // Para no modificar la lógica existente del modelo (los campos del Vehicle son finales),
+    // añadimos banderas internas en la tarea para interpretar un nuevo sentido efectivo.
+    private volatile boolean reincorporatedAfterUTurn = false;      // Indica que ya completó U-TURN y sigue circulando
+    private volatile boolean uturnWestboundAfter = false;           // Sentido efectivo tras la vuelta (true = oeste, false = este)
+
     public VehicleTask(Vehicle vehicle, VehicleLifecycleManager lifecycleManager) {
         this.vehicle = vehicle;
         this.lifecycleManager = lifecycleManager;
@@ -557,7 +565,7 @@ public class VehicleTask implements Runnable {
 
     private String getTrafficLightGroup() {
         if (vehicle.isHighwayVehicle()) {
-            boolean westbound = vehicle.getHighwayLane().isWestbound();
+            boolean westbound = effectiveWestbound();
 
             // Si el vehículo tiene una intersección objetivo específica para giros
             if (vehicle.getTargetIntersection() >= 0 && vehicle.getDirection() != Direction.STRAIGHT) {
@@ -587,7 +595,7 @@ public class VehicleTask implements Runnable {
     private void moveHighwayVehicle() {
         double currentX = vehicle.getX();
         double y = vehicle.getY();
-        boolean westbound = vehicle.getHighwayLane().isWestbound();
+    boolean westbound = effectiveWestbound();
         double newX = westbound ? currentX - HIGHWAY_SPEED : currentX + HIGHWAY_SPEED;
 
         // Fin de autopista -> salir
@@ -922,26 +930,51 @@ public class VehicleTask implements Runnable {
                     }
                 } else if (dir == Direction.U_TURN) {
                     if (westbound) {
-                        // U-turn a la avenida inferior (hacia el este) - Mayor distancia X
-                        postTurnTargetX = endX + POST_TURN_DISTANCE;
-                        postTurnTargetY = endY;
+                        // Venía hacia el oeste (avenida superior). Tras U-TURN pasa a avenida inferior hacia el ESTE
+                        // Nuevo sentido efectivo: este (westbound=false)
+                        uturnWestboundAfter = false;
                     } else {
-                        // U-turn a la avenida superior (hacia el oeste) - Mayor distancia X
-                        postTurnTargetX = endX - POST_TURN_DISTANCE;
-                        postTurnTargetY = endY;
+                        // Venía hacia el este (avenida inferior). Tras U-TURN pasa a avenida superior hacia el OESTE
+                        // Nuevo sentido efectivo: oeste (westbound=true)
+                        uturnWestboundAfter = true;
                     }
+                    reincorporatedAfterUTurn = true;
+                    // Ajustar una pequeña proyección inicial para evitar quedarse dentro de la zona de giro
+                    postTurnTargetX = endX + (uturnWestboundAfter ? -POST_TURN_DISTANCE : POST_TURN_DISTANCE);
+                    postTurnTargetY = endY;
                 } else {
                     // Caso por defecto (nunca debería llegar aquí)
                     postTurnTargetX = endX + (westbound ? -POST_TURN_DISTANCE : POST_TURN_DISTANCE);
                     postTurnTargetY = endY;
                 }
 
-                // Cambiar al estado POST_TURN en lugar de directamente a EXITING
-                currentState = State.POST_TURN;
+                // Si es U-TURN queremos reincorporarnos y continuar el ciclo normal (APPROACHING)
+                if (dir == Direction.U_TURN) {
+                    // Colocar el vehículo exactamente en el punto final del giro antes de reanudar
+                    vehicle.updatePosition(endX, endY);
+                    // Reiniciar banderas de semáforos para nuevo sentido
+                    hasCrossedLastLight = false;
+                    currentState = State.APPROACHING; // Volver a movimiento normal respetando semáforos
+                } else {
+                    // Mantener comportamiento anterior para otros giros
+                    currentState = State.POST_TURN;
+                }
             });
 
             transition.play();
         });
+    }
+
+    /**
+     * Determina el sentido efectivo (westbound/este-oeste) después de una vuelta en U.
+     * No altera la lógica original del vehículo; sólo añade una interpretación adicional
+     * para permitir que el ciclo de movimiento y semáforos continúe tras el U-TURN.
+     */
+    private boolean effectiveWestbound() {
+        if (reincorporatedAfterUTurn) {
+            return uturnWestboundAfter;
+        }
+        return vehicle.getHighwayLane().isWestbound();
     }
 
     // Verifica si es seguro realizar un giro a la derecha en rojo en la intersección indicada (por X)

@@ -162,6 +162,26 @@ public class CollisionDetector {
 
             double distance = calculateDistance(nextX, nextY, other.getX(), other.getY());
 
+            // --- MEJORA ESPECÍFICA (caso solicitado) ---
+            // Evitar que una emergencia frene por vehículos que están en la OTRA avenida
+            // Escenario: vehículos en AVENIDA SUPERIOR carril 3 (~Y=293.3) y emergencia en AVENIDA INFERIOR carril 1 (~Y=326.7)
+            // La separación vertical (~33 px) hacía que se aplicara el umbral reducido (40) y frenara.
+            // Criterio: si ambos son de autopista y la separación vertical es mayor que el ancho de carril (LANE_WIDTH)
+            // entonces pertenecen a bandas (avenidas) distintas y no deben interferir salvo superposición física real.
+            if (emergency.isHighwayVehicle() && other.isHighwayVehicle()) {
+                double verticalGap = Math.abs(emergency.getY() - other.getY());
+                // Usamos > LANE_WIDTH en lugar de >= para tolerar ligeras variaciones numéricas.
+                if (verticalGap > LANE_WIDTH) {
+                    // Solo bloquear si hubiera superposición física directa (colisión real), no por distancia preventiva.
+                    double physicalOverlapThreshold = (VEHICLE_RADIUS * 2) - 2; // margen ligero
+                    if (distance < physicalOverlapThreshold) {
+                        return false; // colisión inmediata aún entre avenidas (caso extremo)
+                    }
+                    // Ignorar este vehículo para cálculos preventivos y continuar.
+                    continue;
+                }
+            }
+
             // Otra emergencia: usar distancia reducida para evitar colisión inmediata
             if (other.getType() == VehicleType.EMERGENCY) {
                 // Si ambos son emergencias, solo evitar colisiones físicas

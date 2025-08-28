@@ -335,8 +335,7 @@ public class TrafficSimulationController {
     }
     private VehicleType pickVehicleType(Random rnd) {
         double p = rnd.nextDouble();
-        if (p < 0.05) return VehicleType.EMERGENCY;
-        else if (p < 0.15) return VehicleType.PUBLIC_TRANSPORT;
+        if (p < 0.15) return VehicleType.PUBLIC_TRANSPORT;
         else if (p < 0.25) return VehicleType.HEAVY;
         else return VehicleType.NORMAL;
     }

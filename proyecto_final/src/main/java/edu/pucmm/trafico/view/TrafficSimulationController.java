@@ -3,6 +3,7 @@ package edu.pucmm.trafico.view;
 import edu.pucmm.trafico.core.*;
 import edu.pucmm.trafico.model.*;
 import edu.pucmm.trafico.concurrent.*;
+import javafx.application.Platform;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
@@ -11,10 +12,8 @@ import javafx.scene.paint.Color;
 import javafx.scene.shape.*;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.List;
-import java.util.Random;
+
+import java.util.*;
 
 public class TrafficSimulationController {
 
@@ -36,6 +35,7 @@ public class TrafficSimulationController {
     private final TrafficLightGroup abajoGroup = new TrafficLightGroup("ABAJO");
     private TrafficLightController lightController;
 
+
     private Map<String, TrafficLightGroup> trafficLightGroups;
 
     // Actualizado: Array con nombres descriptivos de las 4 intersecciones
@@ -49,6 +49,16 @@ public class TrafficSimulationController {
 
     @FXML
     public void initialize() {
+        Platform.runLater(() -> {
+            // Asegurar que el MenuBar siempre esté al frente
+            MenuBar menuBar = (MenuBar) lienzo.getScene().getRoot().lookup(".menu-bar");
+            if (menuBar != null) {
+                menuBar.toFront();
+                menuBar.setMouseTransparent(false);
+            }
+        });
+
+        drawRoadsWithLanes();
         drawRoadsWithLanes();
 
         trafficLightGroups = new HashMap<>();
@@ -72,7 +82,7 @@ public class TrafficSimulationController {
         configLabel.setTextFill(Color.WHITE);
         configLabel.setStyle("-fx-background-color: rgba(0, 0, 0, 0.7); -fx-padding: 10; -fx-background-radius: 5;");
         configLabel.setLayoutX(10);
-        configLabel.setLayoutY(10);
+        configLabel.setLayoutY(25);
 
         lienzo.getChildren().add(configLabel);
     }
@@ -181,79 +191,211 @@ public class TrafficSimulationController {
         alert.setContentText(content);
         alert.showAndWait();
     }
-
     @FXML
     public void crearLoteVehiculos() {
         final int cantidad = 15;
         Random rnd = new Random();
 
-        StringBuilder resumen = new StringBuilder();
-        resumen.append("Se crearon ").append(cantidad).append(" vehículos:\n\n");
+        // Mostrar diálogo indicando que el proceso está iniciando
+        Alert startAlert = new Alert(Alert.AlertType.INFORMATION);
+        startAlert.setTitle("Creación de vehículos");
+        startAlert.setHeaderText("Creando " + cantidad + " vehículos");
+        startAlert.setContentText("Se crearán los vehículos con espaciado adecuado para evitar congestión.");
 
-        int autopista = 0;
-        int calle = 0;
+        // Crear en un hilo separado para no bloquear la UI
+        new Thread(() -> {
+            try {
+                // Contador de vehículos por carril para control de límites
+                Map<HighwayLane, Integer> highwayLaneCounts = new HashMap<>();
+                Map<StartPoint, Integer> streetLaneCounts = new HashMap<>();
 
-        for (int i = 0; i < cantidad; i++) {
-            if (rnd.nextDouble() < 0.7) {
-                // Autopista
-                boolean goingWest = rnd.nextBoolean();
-                Direction dir = pickRandomDirection(rnd);
-                VehicleType tipo = pickVehicleType(rnd);
-
-                HighwayLane lane = HighwayLane.getRandomLane(goingWest, dir);
-
-                Vehicle v = new Vehicle(tipo, lane, dir);
-
-                // Si no es recto, asignar una intersección para girar
-                if (dir != Direction.STRAIGHT) {
-                    // Actualizado: Para lotes aleatorios, seleccionar entre las 4 intersecciones
-                    v.setTargetIntersection(rnd.nextInt(4));
-                    resumen.append(String.format("#%d -> AUTOPISTA | %s | Carril %s | Dir: %s | Girará en %s%n",
-                            v.getId(), tipo.getDescription(), lane.getDescription(),
-                            dir.getDescription(), interseccionesDescripcion[v.getTargetIntersection()]));
-                } else {
-                    // Para movimientos rectos, usar la lógica de salida existente
-                    v.setTargetExit(rnd.nextInt(4));
-                    resumen.append(String.format("#%d -> AUTOPISTA | %s | Carril %s | Dir: %s | Salida: %d%n",
-                            v.getId(), tipo.getDescription(), lane.getDescription(),
-                            dir.getDescription(), v.getTargetExit()));
+                // Inicializar contadores
+                for (HighwayLane lane : HighwayLane.values()) {
+                    highwayLaneCounts.put(lane, 0);
+                }
+                for (StartPoint sp : new StartPoint[]{StartPoint.NORTH_L, StartPoint.NORTH_D,
+                        StartPoint.SOUTH_L, StartPoint.SOUTH_D}) {
+                    streetLaneCounts.put(sp, 0);
                 }
 
-                simulationEngine.addVehicle(v);
-                autopista++;
-            } else {
-                // Calle: elegir entre L/D de norte o sur
-                VehicleType tipo = pickVehicleType(rnd);
-                boolean north = rnd.nextBoolean();
-                StartPoint inicio = north
-                        ? (rnd.nextBoolean() ? StartPoint.NORTH_L : StartPoint.NORTH_D)
-                        : (rnd.nextBoolean() ? StartPoint.SOUTH_L : StartPoint.SOUTH_D);
-                Direction direccion = pickRandomDirection(rnd);
+                // Obtener vehículos activos para contar los existentes
+                Collection<Vehicle> existingVehicles = simulationEngine.getActiveVehicles();
+                for (Vehicle v : existingVehicles) {
+                    if (v.isHighwayVehicle()) {
+                        HighwayLane lane = v.getHighwayLane();
+                        highwayLaneCounts.put(lane, highwayLaneCounts.getOrDefault(lane, 0) + 1);
+                    } else if (v.getStartPoint() != null) {
+                        StartPoint sp = v.getStartPoint();
+                        streetLaneCounts.put(sp, streetLaneCounts.getOrDefault(sp, 0) + 1);
+                    }
+                }
 
-                Vehicle v = new Vehicle(tipo, inicio, direccion);
-                simulationEngine.addVehicle(v);
+                StringBuilder resumen = new StringBuilder();
+                resumen.append("Vehículos creados:\n\n");
 
-                calle++;
-                resumen.append(String.format("#%d -> CALLE | %s | Desde %s | Dir: %s%n",
-                        v.getId(), tipo.getDescription(), inicio.getDescription(),
-                        direccion.getDescription()));
-            }
-            try {
-                Thread.sleep(1000); // 1000 ms = 1 segundo
-            } catch (InterruptedException e) {
+                int autopista = 0;
+                int calle = 0;
+                int creados = 0;
+                int intentos = 0;
+                int maxIntentos = 50; // Límite para evitar bucles infinitos
+
+                // Crear vehículos con espaciado adecuado
+                while (creados < cantidad && intentos < maxIntentos) {
+                    intentos++;
+
+                    try {
+                        Vehicle v = null;
+                        boolean vehiculoViable = false;
+
+                        // Intentar autopista (70%) o calle (30%)
+                        if (rnd.nextDouble() < 0.7) {
+                            // AUTOPISTA
+                            boolean goingWest = rnd.nextBoolean();
+
+                            // Para evitar congestión, favorecer dirección STRAIGHT
+                            Direction dir;
+                            double dirProb = rnd.nextDouble();
+                            if (dirProb < 0.75) {
+                                dir = Direction.STRAIGHT; // 75% probabilidad
+                            } else if (dirProb < 0.9) {
+                                dir = Direction.RIGHT;    // 15% probabilidad
+                            } else if (dirProb < 0.98) {
+                                dir = Direction.LEFT;     // 8% probabilidad
+                            } else {
+                                dir = Direction.U_TURN;   // 2% probabilidad
+                            }
+
+                            VehicleType tipo = pickVehicleType(rnd);
+
+                            // NUEVO: Filtrar carriles según la dirección del giro
+                            List<HighwayLane> availableLanes = new ArrayList<>();
+
+                            // Para cada dirección de la autopista (oeste/este), hay 3 carriles: LEFT, CENTER, RIGHT
+                            if (dir == Direction.RIGHT) {
+                                // Si va a doblar a la derecha, solo usar carril derecho
+                                HighwayLane rightLane = goingWest ? HighwayLane.WEST_RIGHT : HighwayLane.EAST_RIGHT;
+                                if (highwayLaneCounts.get(rightLane) < 4) {
+                                    availableLanes.add(rightLane);
+                                }
+                            }
+                            else if (dir == Direction.LEFT || dir == Direction.U_TURN) {
+                                // Si va a doblar a la izquierda o en U, solo usar carril izquierdo
+                                HighwayLane leftLane = goingWest ? HighwayLane.WEST_LEFT : HighwayLane.EAST_LEFT;
+                                if (highwayLaneCounts.get(leftLane) < 4) {
+                                    availableLanes.add(leftLane);
+                                }
+                            }
+                            else {
+                                // STRAIGHT: puede usar cualquier carril
+                                for (HighwayLane lane : HighwayLane.values()) {
+                                    if (lane.isWestbound() == goingWest && highwayLaneCounts.get(lane) < 4) {
+                                        availableLanes.add(lane);
+                                    }
+                                }
+                            }
+
+                            if (availableLanes.isEmpty()) {
+                                continue; // No hay carriles disponibles, intentar otro tipo
+                            }
+
+                            // Seleccionar carril aleatorio disponible
+                            HighwayLane lane = availableLanes.get(rnd.nextInt(availableLanes.size()));
+
+                            v = new Vehicle(tipo, lane, dir);
+
+                            // Si no es recto, asignar una intersección para girar
+                            if (dir != Direction.STRAIGHT) {
+                                v.setTargetIntersection(rnd.nextInt(4));
+                                resumen.append(String.format("#%d -> AUTOPISTA | %s | Carril %s | Dir: %s | Girará en %s%n",
+                                        v.getId(), tipo.getDescription(), lane.getDescription(),
+                                        dir.getDescription(), interseccionesDescripcion[v.getTargetIntersection()]));
+                            } else {
+                                v.setTargetExit(rnd.nextInt(4));
+                                resumen.append(String.format("#%d -> AUTOPISTA | %s | Carril %s | Dir: %s | Salida: %d%n",
+                                        v.getId(), tipo.getDescription(), lane.getDescription(),
+                                        dir.getDescription(), v.getTargetExit()));
+                            }
+
+                            // Actualizar contador de carril
+                            highwayLaneCounts.put(lane, highwayLaneCounts.get(lane) + 1);
+                            vehiculoViable = true;
+                            autopista++;
+
+                        } else {
+                            // CALLE
+                            VehicleType tipo = pickVehicleType(rnd);
+
+                            // Seleccionar un punto de inicio que no esté lleno
+                            List<StartPoint> availableStartPoints = new ArrayList<>();
+                            for (StartPoint sp : new StartPoint[]{StartPoint.NORTH_L, StartPoint.NORTH_D,
+                                    StartPoint.SOUTH_L, StartPoint.SOUTH_D}) {
+                                if (streetLaneCounts.get(sp) < 3) {
+                                    availableStartPoints.add(sp);
+                                }
+                            }
+
+                            if (availableStartPoints.isEmpty()) {
+                                continue; // No hay calles disponibles, intentar otro tipo
+                            }
+
+                            // Para evitar congestión, favorecer dirección STRAIGHT en calles también
+                            Direction direccion;
+                            double dirProb = rnd.nextDouble();
+                            if (dirProb < 0.8) {
+                                direccion = Direction.STRAIGHT; // 80% probabilidad
+                            } else if (dirProb < 0.95) {
+                                direccion = Direction.RIGHT;    // 15% probabilidad
+                            } else {
+                                direccion = Direction.LEFT;     // 5% probabilidad
+                            }
+
+                            StartPoint inicio = availableStartPoints.get(rnd.nextInt(availableStartPoints.size()));
+                            v = new Vehicle(tipo, inicio, direccion);
+
+                            // Actualizar contador de carril
+                            streetLaneCounts.put(inicio, streetLaneCounts.get(inicio) + 1);
+                            vehiculoViable = true;
+                            calle++;
+
+                            resumen.append(String.format("#%d -> CALLE | %s | Desde %s | Dir: %s%n",
+                                    v.getId(), tipo.getDescription(), inicio.getDescription(),
+                                    direccion.getDescription()));
+                        }
+
+                        if (vehiculoViable) {
+                            // CREAR EL VEHÍCULO EN LA SIMULACIÓN
+                            final Vehicle finalV = v;
+                            Platform.runLater(() -> simulationEngine.addVehicle(finalV));
+                            creados++;
+
+                            // ESPERAR ANTES DE CREAR EL SIGUIENTE VEHÍCULO
+                            // Espaciado entre 0.5 y 1.5 segundos para mejor fluidez
+                            double variableDelay = 0.5 + rnd.nextDouble();
+                            Thread.sleep((long)(variableDelay * 1000));
+                        }
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+
+                resumen.append(String.format("\nTotal: %d de autopista, %d de calle", autopista, calle));
+
+                // Mostrar resumen en la UI
+                Platform.runLater(() -> {
+                    Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                    alert.setTitle("Lote de Vehículos");
+                    alert.setHeaderText("Creación de Lote Completada");
+                    alert.setContentText(resumen.toString());
+                    alert.showAndWait();
+                });
+
+            } catch (Exception e) {
                 e.printStackTrace();
             }
-        }
+        }).start();
 
-        resumen.append(String.format("\nTotal: %d de autopista, %d de calle", autopista, calle));
-
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
-        alert.setTitle("Lote de Vehículos");
-        alert.setHeaderText("Creación de Lote Aleatorio");
-        alert.setContentText(resumen.toString());
-        alert.showAndWait();
+        startAlert.showAndWait();
     }
-
     private VehicleType pickVehicleType(Random rnd) {
         double p = rnd.nextDouble();
         if (p < 0.05) return VehicleType.EMERGENCY;

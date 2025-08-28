@@ -69,9 +69,18 @@ public class VehicleLifecycleManager {
     /**
      * Agrega un vehículo al sistema y lanza su tarea de movimiento
      */
+    /**
+     * Agrega un vehículo al sistema y lanza su tarea de movimiento
+     */
     public void addVehicle(Vehicle vehicle, Circle visualNode) {
         // Registrar vehículo
         registry.registerVehicle(vehicle);
+
+        // ← AGREGAR ESTAS LÍNEAS PARA DESHABILITAR EVENTOS DE MOUSE
+        visualNode.setMouseTransparent(true);      // No capturar eventos de mouse
+        visualNode.setFocusTraversable(false);     // No recibir foco
+        visualNode.setPickOnBounds(false);         // Solo detectar en el área visible del círculo
+
         vehicleNodes.put(vehicle.getId(), visualNode);
 
         // Log especial para emergencias

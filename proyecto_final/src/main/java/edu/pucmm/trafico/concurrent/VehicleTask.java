@@ -294,24 +294,6 @@ public class VehicleTask implements Runnable {
             canCross = (light == TrafficLightState.GREEN) ||
                     (light == TrafficLightState.YELLOW && vehicle.getType() == VehicleType.EMERGENCY);
 
-            // Regla adicional: giro a la derecha en rojo en la PRIMERA intersección si es seguro
-            if (!canCross && vehicle.getDirection() == Direction.RIGHT && light == TrafficLightState.RED) {
-                int idx = Math.min(Math.max(vehicle.getTargetIntersection(), 0), VALID_INTERSECTIONS.length - 1);
-                if (idx == 0) { // solo primera intersección
-                    int targetX = VALID_INTERSECTIONS[idx];
-                    if (isSafeToRightTurnOnRed(targetX)) {
-                        IntersectionSemaphore sem = lifecycleManager.getIntersectionSemaphore();
-                        boolean acquired = sem != null && sem.tryAcquire(vehicle, 100, TimeUnit.MILLISECONDS);
-                        if (acquired) {
-                            vehicle.setInIntersection(true);
-                            vehicle.setWaitingAtLight(false);
-                            currentState = State.CROSSING;
-                            performHighwayTurn();
-                            return;
-                        }
-                    }
-                }
-            }
             if (canCross) {
                 vehicle.setWaitingAtLight(false);
                 currentState = State.APPROACHING; // Reanudar avance

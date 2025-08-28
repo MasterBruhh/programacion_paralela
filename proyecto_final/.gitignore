@@ -1,0 +1,92 @@
+# Ignorar completamente estas carpetas
+.gradle
+build
+
+# Excepciones específicas para los archivos del wrapper de Gradle que sí queremos mantener
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+
+# Otros archivos de Gradle que no necesitamos
+gradle-app.setting
+.gradletasknamecache
+
+# Archivos de compilación
+bin/
+out/
+target/
+
+# Archivos específicos de IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+*.iws
+.idea_modules/
+.shelf/
+
+# Archivos específicos de Eclipse
+.classpath
+.project
+.settings/
+.metadata/
+
+# Archivos específicos de VS Code
+.vscode/
+.history/
+*.code-workspace
+
+# Archivos específicos de NetBeans
+nbproject/
+nbactions.xml
+nb-configuration.xml
+
+# Archivos de registro
+*.log
+*.log.*
+logs/
+log/
+
+# Archivos temporales del sistema
+*.tmp
+*.temp
+*.bak
+*.swp
+*~.nib
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Archivos específicos de Java
+*.class
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+*.rar
+hs_err_pid*
+
+# Archivos generados automáticamente
+.apt_generated/
+.apt_generated_test/
+.factorypath
+.sts4-cache/
+
+# Archivos locales de configuración
+application-*.yml
+application-*.properties
+local.properties
+/config/application-dev.yml
+/config/application-prod.yml
+
+# Archivos de caché
+.cache/
+.cpcache/
+
+# Archivos de cobertura de código
+.coverage/
+coverage/
+htmlcov/
+.lcov
+.nyc_output

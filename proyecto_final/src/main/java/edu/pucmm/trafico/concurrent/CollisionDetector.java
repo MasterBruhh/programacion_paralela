@@ -156,23 +156,39 @@ public class CollisionDetector {
      */
     private boolean canMoveEmergency(Vehicle emergency, double nextX, double nextY,
                                      Collection<Vehicle> activeVehicles) {
-        // Las emergencias solo evitan colisiones directas
+        // Las emergencias tienen lógica especial para evitar colisiones
         for (Vehicle other : activeVehicles) {
             if (other.getId() == emergency.getId() || !other.isActive()) continue;
 
             double distance = calculateDistance(nextX, nextY, other.getX(), other.getY());
 
-            // Solo evitar colisiones muy cercanas
-            if (distance < EMERGENCY_MIN_DISTANCE) {
-                // Si el otro vehículo está cediendo, permitir pasar más cerca
-                if (other.isEmergencyYielding()) {
-                    if (distance > VEHICLE_RADIUS) {
-                        continue;
-                    }
+            // Otra emergencia: usar distancia reducida para evitar colisión inmediata
+            if (other.getType() == VehicleType.EMERGENCY) {
+                // Si ambos son emergencias, solo evitar colisiones físicas
+                if (distance < VEHICLE_RADIUS * 2) {
+                    logger.fine("Emergencia " + emergency.getId() +
+                            " evitando colisión con otra emergencia " + other.getId());
+                    return false;
                 }
+                continue; // Si hay suficiente espacio, ignorar otras emergencias
+            }
 
+            // Determinar umbral dinámico para no emergencias
+            double threshold = EMERGENCY_MIN_DISTANCE;
+            if (emergency.isHighwayVehicle() && other.isHighwayVehicle()) {
+                if (emergency.getCurrentLane() != other.getCurrentLane()) {
+                    // Carril diferente: permitir acercarse mucho más (solo evitar superposición real)
+                    threshold = 2 * VEHICLE_RADIUS + SAFETY_MARGIN; // ~40 px
+                }
+            }
+
+            if (distance < threshold) {
+                // Si el otro está cediendo y estamos todavía a más de la superposición física, continuar
+                if (other.isEmergencyYielding() && distance > VEHICLE_RADIUS) {
+                    continue;
+                }
                 logger.fine("Emergencia " + emergency.getId() +
-                        " evitando colisión crítica con " + other.getId());
+                        " evitando colisión con " + other.getId() + " (d=" + distance + ")");
                 return false;
             }
         }

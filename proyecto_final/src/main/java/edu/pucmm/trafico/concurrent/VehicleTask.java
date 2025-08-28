@@ -286,13 +286,16 @@ public class VehicleTask implements Runnable {
     private void handleWaitingAtLight() throws InterruptedException {
         // Determinar grupo de semáforo
         String group = getTrafficLightGroup();
-        TrafficLightState light = lifecycleManager.getTrafficLightState(group);
+        // Obtener estado contextual (por vehículo) para respetar protocolo de emergencia por carril
+        TrafficLightState light = lifecycleManager.getTrafficLightStateFor(vehicle, group);
 
         boolean canCross;
-        if (vehicle.isHighwayVehicle()) {
-            // En autopista, respetar verde; emergencia puede pasar en amarillo
-            canCross = (light == TrafficLightState.GREEN) ||
-                    (light == TrafficLightState.YELLOW && vehicle.getType() == VehicleType.EMERGENCY);
+        // Si es emergencia, SIEMPRE puede cruzar sin importar el semáforo
+        if (vehicle.getType() == VehicleType.EMERGENCY) {
+            canCross = true;
+        } else if (vehicle.isHighwayVehicle()) {
+            // En autopista, sólo verde permite avanzar a vehículos normales
+            canCross = (light == TrafficLightState.GREEN);
 
             if (canCross) {
                 vehicle.setWaitingAtLight(false);
@@ -302,9 +305,8 @@ public class VehicleTask implements Runnable {
             }
             return;
         } else {
-            canCross = (vehicle.getType() == VehicleType.EMERGENCY)
-                    ? (light == TrafficLightState.GREEN || light == TrafficLightState.YELLOW)
-                    : (light == TrafficLightState.GREEN);
+            // Para calle, vehículos normales sólo con verde
+            canCross = (light == TrafficLightState.GREEN);
 
             // Regla adicional para CALLE: permitir giro a la derecha en rojo con precaución (si es seguro)
             if (!canCross && vehicle.getDirection() == Direction.RIGHT && light == TrafficLightState.RED) {
@@ -657,12 +659,16 @@ public class VehicleTask implements Runnable {
                     (currentX < targetX + 80 && currentX > targetX - 10);
 
             if (isInTurnZone) {
-                // Verificar semáforo
+                // Verificar semáforo - usar estado contextual
                 String group = getTrafficLightGroup();
-                TrafficLightState light = lifecycleManager.getTrafficLightState(group);
-
-                boolean canTurn = (light == TrafficLightState.GREEN) ||
-                        (light == TrafficLightState.YELLOW && vehicle.getType() == VehicleType.EMERGENCY);
+                TrafficLightState light = lifecycleManager.getTrafficLightStateFor(vehicle, group);
+                
+                boolean canTurn;
+                if (vehicle.getType() == VehicleType.EMERGENCY) {
+                    canTurn = true; // Las emergencias siempre pueden girar
+                } else {
+                    canTurn = (light == TrafficLightState.GREEN); // Vehículos normales sólo en verde
+                }
 
                 // Regla solicitada: giro a la derecha en rojo con precaución SOLO en la primera intersección
                 boolean isRightTurnOnRedAllowedHere =
@@ -693,7 +699,8 @@ public class VehicleTask implements Runnable {
         // Posiciones de los semáforos (SOLO las dos intersecciones principales tienen semáforos)
         // Usamos VALID_INTERSECTIONS que ya ha sido actualizado para incluir solo las intersecciones principales
         String group = getTrafficLightGroup();
-        TrafficLightState light = lifecycleManager.getTrafficLightState(group);
+    // Estado contextual (puede diferir de getTrafficLightState normal bajo emergencia)
+    TrafficLightState light = lifecycleManager.getTrafficLightStateFor(vehicle, group);
 
         // Verificar si estamos acercándonos a un semáforo
         for (int i = 0; i < VALID_INTERSECTIONS.length; i++) {
@@ -720,9 +727,13 @@ public class VehicleTask implements Runnable {
 
             if (!approachingThis) continue;
 
-            // Si luz roja (o amarilla para no emergencias), detenerse en stopX
-            boolean allowed = (light == TrafficLightState.GREEN) ||
-                    (light == TrafficLightState.YELLOW && vehicle.getType() == VehicleType.EMERGENCY);
+            // Emergencias ignoran semáforo siempre
+            boolean allowed;
+            if (vehicle.getType() == VehicleType.EMERGENCY) {
+                allowed = true; // Las emergencias siempre tienen permitido pasar
+            } else {
+                allowed = (light == TrafficLightState.GREEN); // Normales solo con verde
+            }
 
             if (!allowed) {
                 // Detectar si estamos aproximándonos a la línea de pare (verde)

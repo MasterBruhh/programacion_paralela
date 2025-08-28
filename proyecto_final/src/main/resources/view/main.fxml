@@ -35,7 +35,7 @@
                     </items>
                 </Menu>
                 <Menu text="Intersección">
-                    <!-- ✅ CORREGIDO: Usando 'id' en lugar de 'fx:id' -->
+                    <!--CORREGIDO: Usando 'id' en lugar de 'fx:id' -->
                     <MenuItem id="InterseccionLateralIzq" mnemonicParsing="false" onAction="#handleConfiguracion" text="Lateral Izquierda (X=70)" />
                     <MenuItem id="PrimeraInterseccion" mnemonicParsing="false" onAction="#handleConfiguracion" text="Primera Central (X=390)" />
                     <MenuItem id="SegundaInterseccion" mnemonicParsing="false" onAction="#handleConfiguracion" text="Segunda Central (X=690)" />

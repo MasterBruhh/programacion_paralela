@@ -9,6 +9,8 @@ import javafx.util.Duration;
 import java.util.concurrent.*;
 import java.util.Map;
 import java.util.Collection;
+import java.util.Set;
+import java.util.HashSet;
 import java.util.logging.Logger;
 
 /**
@@ -34,16 +36,35 @@ public class VehicleLifecycleManager {
      */
     private static class EmergencyProtocol {
         final String groupName;
-        final long emergencyVehicleId;
+        final Set<Long> emergencyVehicleIds;  // Conjunto de IDs de vehículos de emergencia
         final long startTime;
         volatile boolean active;
-        TrafficLightState previousState;
+        // Mantener referencia al estado real en el momento de activación (solo informativo)
+        final TrafficLightState snapshotState;
 
-        EmergencyProtocol(String groupName, long emergencyVehicleId) {
+        EmergencyProtocol(String groupName, long emergencyVehicleId, TrafficLightState snapshotState) {
             this.groupName = groupName;
-            this.emergencyVehicleId = emergencyVehicleId;
+            this.emergencyVehicleIds = new HashSet<>();
+            this.emergencyVehicleIds.add(emergencyVehicleId);
             this.startTime = System.currentTimeMillis();
             this.active = true;
+            this.snapshotState = snapshotState;
+        }
+        
+        void addEmergencyVehicle(long vehicleId) {
+            emergencyVehicleIds.add(vehicleId);
+        }
+        
+        void removeEmergencyVehicle(long vehicleId) {
+            emergencyVehicleIds.remove(vehicleId);
+        }
+        
+        int getEmergencyCount() {
+            return emergencyVehicleIds.size();
+        }
+        
+        boolean isEmpty() {
+            return emergencyVehicleIds.isEmpty();
         }
     }
 
@@ -85,11 +106,17 @@ public class VehicleLifecycleManager {
 
         // Log especial para emergencias
         if (vehicle.getType() == VehicleType.EMERGENCY) {
-            logger.warning(String.format("⚠️ EMERGENCIA: Vehículo #%d entrando al sistema", 
+            logger.warning(String.format("EMERGENCIA: Vehículo #%d entrando al sistema", 
                 vehicle.getId()));
             
             // Notificar a todos los vehículos activos sobre la emergencia
             notifyEmergencyApproaching(vehicle);
+
+            // Activar protocolo inmediatamente para su grupo correspondiente
+            String groupName = determineGroupNameForVehicle(vehicle);
+            if (groupName != null) {
+                activateEmergencyProtocol(groupName, vehicle.getId());
+            }
         }
 
         logger.info(String.format("Registrando vehículo #%d [%s] en %s",
@@ -139,11 +166,7 @@ public class VehicleLifecycleManager {
         synchronized (emergencyLock) {
             // Verificar si ya hay un protocolo activo para este grupo
             EmergencyProtocol existing = emergencyProtocols.get(groupName);
-            if (existing != null && existing.active) {
-                logger.fine("Protocolo de emergencia ya activo para grupo " + groupName);
-                return;
-            }
-
+            
             // Buscar el vehículo de emergencia activo
             long emergencyId = -1;
             for (Vehicle v : registry.snapshotAll()) {
@@ -158,34 +181,52 @@ public class VehicleLifecycleManager {
                 return;
             }
 
-            // Crear nuevo protocolo
-            EmergencyProtocol protocol = new EmergencyProtocol(groupName, emergencyId);
-            
-            // Guardar el estado actual del semáforo
-            TrafficLightGroup group = trafficLightGroups.get(groupName);
-            if (group != null) {
-                protocol.previousState = group.getState();
-                
-                // Forzar verde para el grupo de emergencia
-                Platform.runLater(() -> {
-                    // Poner todos los demás grupos en rojo
-                    for (Map.Entry<String, TrafficLightGroup> entry : trafficLightGroups.entrySet()) {
-                        if (!entry.getKey().equals(groupName)) {
-                            entry.getValue().setState(TrafficLightState.RED);
-                        }
-                    }
-                    // Poner el grupo de emergencia en verde
-                    group.setState(TrafficLightState.GREEN);
-                });
-                
-                logger.warning("🚨 PROTOCOLO DE EMERGENCIA ACTIVADO para grupo " + groupName + 
-                             " - Vehículo #" + emergencyId);
+            // Si ya existe un protocolo activo, añadir esta emergencia al grupo
+            if (existing != null && existing.active) {
+                existing.emergencyVehicleIds.add(emergencyId);
+                logger.warning("Emergencia añadida #" + emergencyId + " al grupo " + 
+                              groupName + " (total=" + existing.getEmergencyCount() + ")");
+                return;
             }
-            
+
+            // Si no existe protocolo activo, crear uno nuevo
+            TrafficLightGroup group = trafficLightGroups.get(groupName);
+            TrafficLightState snapshot = group != null ? group.getState() : TrafficLightState.RED;
+            EmergencyProtocol protocol = new EmergencyProtocol(groupName, emergencyId, snapshot);
             emergencyProtocols.put(groupName, protocol);
+
+            logger.warning("PROTOCOLO DE EMERGENCIA ACTIVADO para grupo " + groupName +
+                " - Emergencias=[" + emergencyId + "]" + (group != null ? " (Estado previo: " + snapshot + ")" : ""));
+
+            // Programar timeout de seguridad
+            scheduleEmergencyTimeout(groupName, 30000);
+        }
+    }
+
+    /**
+     * Variante explícita para activar protocolo con ID de vehículo ya conocido.
+     */
+    public void activateEmergencyProtocol(String groupName, long emergencyVehicleId) {
+        synchronized (emergencyLock) {
+            EmergencyProtocol existing = emergencyProtocols.get(groupName);
             
-            // Programar timeout por si acaso
-            scheduleEmergencyTimeout(groupName, 30000); // 30 segundos máximo
+            // Si ya existe un protocolo activo, añadir esta emergencia al grupo
+            if (existing != null && existing.active) {
+                existing.emergencyVehicleIds.add(emergencyVehicleId);
+                logger.warning("Emergencia añadida #" + emergencyVehicleId + " al grupo " + 
+                              groupName + " (total=" + existing.getEmergencyCount() + ")");
+                return;
+            }
+
+            TrafficLightGroup group = trafficLightGroups.get(groupName);
+            TrafficLightState snapshot = group != null ? group.getState() : TrafficLightState.RED;
+            EmergencyProtocol protocol = new EmergencyProtocol(groupName, emergencyVehicleId, snapshot);
+            emergencyProtocols.put(groupName, protocol);
+
+            logger.warning("PROTOCOLO DE EMERGENCIA ACTIVADO para grupo " + groupName +
+                " - Emergencias=[" + emergencyVehicleId + "]" + (group != null ? " (Estado previo: " + snapshot + ")" : ""));
+
+            scheduleEmergencyTimeout(groupName, 30000);
         }
     }
 
@@ -213,19 +254,36 @@ public class VehicleLifecycleManager {
         protocol.active = false;
         String groupName = protocol.groupName;
         
-        // Restaurar estado anterior del semáforo
-        TrafficLightGroup group = trafficLightGroups.get(groupName);
-        if (group != null && protocol.previousState != null) {
-            Platform.runLater(() -> {
-                // Restaurar el ciclo normal de semáforos
-                logger.warning("✅ PROTOCOLO DE EMERGENCIA DESACTIVADO para grupo " + groupName);
-            });
-        }
-        
+        // No se modifican físicamente los semáforos durante el protocolo (virtualización),
+        // por lo que solo se registra el evento.
+        Platform.runLater(() -> logger.warning("PROTOCOLO DE EMERGENCIA DESACTIVADO para grupo " + groupName +
+            " (Estado original: " + protocol.snapshotState + ")"));
+
         emergencyProtocols.remove(groupName);
         
         long duration = System.currentTimeMillis() - protocol.startTime;
         logger.info("Protocolo de emergencia duró " + (duration/1000.0) + " segundos");
+    }
+    
+    /**
+     * Elimina una emergencia específica de un protocolo activo
+     */
+    private void removeEmergencyFromProtocol(String groupName, long emergencyId) {
+        synchronized (emergencyLock) {
+            EmergencyProtocol protocol = emergencyProtocols.get(groupName);
+            if (protocol != null && protocol.active) {
+                protocol.emergencyVehicleIds.remove(emergencyId);
+                
+                if (protocol.isEmpty()) {
+                    logger.warning("Última emergencia del grupo " + groupName + " salió - desactivando protocolo");
+                    deactivateProtocol(protocol);
+                } else {
+                    logger.warning("Vehículo de emergencia " + emergencyId + 
+                                 " saliendo del grupo " + groupName + 
+                                 " (quedan=" + protocol.getEmergencyCount() + ")");
+                }
+            }
+        }
     }
 
     /**
@@ -274,25 +332,98 @@ public class VehicleLifecycleManager {
      * Considera protocolos de emergencia activos
      */
     public TrafficLightState getTrafficLightState(String groupName) {
-        // Si hay protocolo de emergencia activo, devolver el estado forzado
         synchronized (emergencyLock) {
-            EmergencyProtocol protocol = emergencyProtocols.get(groupName);
-            if (protocol != null && protocol.active) {
-                return TrafficLightState.GREEN; // Siempre verde durante emergencia
-            }
-            
-            // Si hay emergencia en otro grupo, este debe estar en rojo
+            // Recolectar protocolos activos
+            boolean anyActive = false;
+            boolean thisActive = false;
             for (EmergencyProtocol p : emergencyProtocols.values()) {
-                if (p.active && !p.groupName.equals(groupName)) {
+                if (p.active) {
+                    anyActive = true;
+                    if (p.groupName.equals(groupName)) thisActive = true;
+                }
+            }
+
+            if (anyActive) {
+                if (thisActive) {
+                    // Virtualizar verde para permitir que TODOS los vehículos del mismo grupo avancen
+                    return TrafficLightState.GREEN;
+                } else {
+                    // Bloquear todos los demás grupos con rojo, independientemente de su estado real
                     return TrafficLightState.RED;
                 }
             }
         }
-        
-        // Estado normal del semáforo
+
         TrafficLightGroup group = trafficLightGroups.get(groupName);
         return group != null ? group.getState() : TrafficLightState.RED;
     }
+
+    /**
+     * Versión con conciencia de vehículo: restringe la prioridad a SOLO el carril del vehículo de emergencia
+     * y a los vehículos que están delante en ese mismo carril. Los demás carriles del mismo grupo se detienen.
+     */
+    public TrafficLightState getTrafficLightStateFor(Vehicle vehicle, String groupName) {
+        synchronized (emergencyLock) {
+            // Si no hay protocolos activos, devolver estado normal
+            if (emergencyProtocols.isEmpty()) {
+                return getTrafficLightState(groupName); // reutiliza lógica normal
+            }
+
+            // ¿Hay protocolo para este grupo?
+            EmergencyProtocol protocol = emergencyProtocols.get(groupName);
+            
+            // Si el vehículo es una emergencia, SIEMPRE VE VERDE sin importar cuántas haya
+            if (vehicle.getType() == VehicleType.EMERGENCY) {
+                return TrafficLightState.GREEN;
+            }
+
+            if (protocol != null && protocol.active) {
+                // Buscar todas las emergencias activas en el grupo actual
+                Collection<Vehicle> allVehicles = getAllActiveVehicles();
+                boolean anyEmergencyAhead = false;
+                
+                for (Vehicle v : allVehicles) {
+                    if (v.getType() != VehicleType.EMERGENCY || !v.isActive()) continue;
+                    
+                    // Verificar si esta emergencia está en nuestro mismo grupo (misma dirección)
+                    if (!groupName.equals(determineGroupNameForVehicle(v))) continue;
+                    
+                    // Caso avenidas: permitir que CUALQUIER vehículo por delante (en cualquier carril del mismo grupo/dirección)
+                    // reciba verde virtual para despejar la trayectoria; los que están detrás permanecen en rojo.
+                    if (v.isHighwayVehicle() && vehicle.isHighwayVehicle()) {
+                        boolean westbound = v.getHighwayLane().isWestbound();
+                        boolean vehicleAhead = westbound ? (vehicle.getX() < v.getX())
+                                                        : (vehicle.getX() > v.getX());
+                        if (vehicleAhead) {
+                            anyEmergencyAhead = true;
+                            break;
+                        }
+                    }
+                }
+                
+                if (anyEmergencyAhead) {
+                    return TrafficLightState.GREEN; // Avanza para despejar (aunque sea otro carril)
+                }
+                
+                // Vehículos detrás o en calles esperan
+                return TrafficLightState.RED;
+            }
+
+            // Si el protocolo es para otro grupo: bloqueo completo
+            // Verificar si hay emergencias activas en cualquier otro grupo
+            for (EmergencyProtocol p : emergencyProtocols.values()) {
+                if (p.active && !p.groupName.equals(groupName)) {
+                    // Si hay emergencias en otro grupo (ej. en ABAJO), este grupo (ej. ARRIBA) debe bloquearse
+                    return TrafficLightState.RED;
+                }
+            }
+        }
+        // Sin interferencia: estado normal real
+        TrafficLightGroup group = trafficLightGroups.get(groupName);
+        return group != null ? group.getState() : TrafficLightState.RED;
+    }
+
+    /* La función findVehicleById ya no es necesaria */
 
     /**
      * Semáforo de intersección
@@ -310,16 +441,11 @@ public class VehicleLifecycleManager {
             task.cancel(true);
         }
 
-        // Si era emergencia, verificar protocolos activos
+        // Si era emergencia, actualizar protocolo activo
         if (vehicle.getType() == VehicleType.EMERGENCY) {
-            synchronized (emergencyLock) {
-                for (EmergencyProtocol protocol : emergencyProtocols.values()) {
-                    if (protocol.emergencyVehicleId == vehicle.getId() && protocol.active) {
-                        logger.warning("Vehículo de emergencia " + vehicle.getId() + 
-                                     " saliendo - desactivando protocolo");
-                        deactivateProtocol(protocol);
-                    }
-                }
+            String groupName = determineGroupNameForVehicle(vehicle);
+            if (groupName != null) {
+                removeEmergencyFromProtocol(groupName, vehicle.getId());
             }
         }
 
@@ -332,6 +458,23 @@ public class VehicleLifecycleManager {
                 performExitAnimation(node, vehicle);
             }
         });
+    }
+
+    /**
+     * Determina el nombre de grupo de semáforo asociado a un vehículo (para protocolo de emergencia).
+     */
+    private String determineGroupNameForVehicle(Vehicle v) {
+        if (v.isHighwayVehicle()) {
+            // Avenidas superiores (westbound) = ARRIBA, inferiores (eastbound) = ABAJO
+            return v.getHighwayLane().isWestbound() ? "ARRIBA" : "ABAJO";
+        } else if (v.getStartPoint() != null) {
+            return switch (v.getStartPoint()) {
+                case NORTH_L, NORTH_D -> "CalleIzq"; // Grupo para calle izquierda (norte -> sur)
+                case SOUTH_L, SOUTH_D -> "CalleDer"; // Grupo para calle derecha (sur -> norte)
+                case EAST, WEST -> "CalleDer";       // Reusar grupo (según diseño existente)
+            };
+        }
+        return null;
     }
 
     /**
